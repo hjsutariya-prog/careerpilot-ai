@@ -1,19 +1,269 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { useConvexAuth } from 'convex/react'
 import './App.css'
 
+const roleOptions = ['Product Manager', 'Business Analyst', 'Frontend Developer', 'Backend Developer', 'Data Analyst', 'QA Engineer']
+const workPreferences = ['Remote', 'Hybrid', 'On-site']
+const jobTypes = ['Full-time', 'Contract', 'Internship']
+
+type PreferenceErrors = Partial<Record<'roles' | 'skills' | 'experience' | 'location' | 'salary' | 'jobType' | 'notice' | 'time', string>>
+
+type AuthMode = 'signIn' | 'signUp'
+
+function AuthDialog({ initialMode, onClose }: { initialMode: AuthMode; onClose: () => void }) {
+  const { signIn } = useAuthActions()
+  const [mode, setMode] = useState<AuthMode>(initialMode)
+  const [isWorking, setIsWorking] = useState(false)
+  const [error, setError] = useState('')
+
+  const continueWithPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+    const email = String(formData.get('email') ?? '').trim()
+    const password = String(formData.get('password') ?? '')
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Enter a valid email address.')
+      return
+    }
+    if (password.length < 8) {
+      setError('Use a password with at least 8 characters.')
+      return
+    }
+
+    setError('')
+    setIsWorking(true)
+    try {
+      await signIn('password', formData)
+    } catch {
+      setError(mode === 'signIn' ? 'We could not sign you in with those details.' : 'We could not create that account. Try a different email address.')
+    } finally {
+      setIsWorking(false)
+    }
+  }
+
+  const continueWithGoogle = async () => {
+    setError('')
+    setIsWorking(true)
+    try {
+      await signIn('google')
+    } catch {
+      setError('Google sign-in could not start. Please try again.')
+      setIsWorking(false)
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
+      <section aria-labelledby="sign-in-title" className="sign-in-dialog real-auth-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+        <button aria-label="Close sign in" className="close-button" onClick={onClose} type="button">×</button>
+        <p className="eyebrow">{mode === 'signUp' ? 'PRIVATE FROM THE START' : 'WELCOME BACK'}</p>
+        <h2 id="sign-in-title">{mode === 'signUp' ? 'Your job search stays yours.' : 'Sign in to your job search.'}</h2>
+        <p className="auth-intro">Create an account before adding a resume. Each resume will belong only to its signed-in owner.</p>
+
+        <button className="google-auth" disabled={isWorking} onClick={() => void continueWithGoogle()} type="button"><span aria-hidden="true">G</span> Continue with Google</button>
+        <div className="auth-divider"><span>or use email</span></div>
+
+        <form className="auth-form" noValidate onSubmit={(event) => void continueWithPassword(event)}>
+          <label>Email<input autoComplete="email" name="email" placeholder="you@example.com" type="email" /></label>
+          <label>Password<input autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'} name="password" placeholder="At least 8 characters" type="password" /></label>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <input name="flow" type="hidden" value={mode} />
+          <button className="email-auth" disabled={isWorking} type="submit">{isWorking ? 'One moment…' : mode === 'signIn' ? 'Sign in with email' : 'Create my account'} <span aria-hidden="true">→</span></button>
+        </form>
+
+        <p className="auth-switch">{mode === 'signIn' ? 'New to CareerPilot?' : 'Already have an account?'} <button onClick={() => { setMode(mode === 'signIn' ? 'signUp' : 'signIn'); setError('') }} type="button">{mode === 'signIn' ? 'Create an account' : 'Sign in instead'}</button></p>
+      </section>
+    </div>
+  )
+}
+
+function PreferencesScreen({ onBack }: { onBack: () => void }) {
+  const [roles, setRoles] = useState<string[]>([])
+  const [skills, setSkills] = useState('')
+  const [experience, setExperience] = useState('')
+  const [location, setLocation] = useState('')
+  const [workPreference, setWorkPreference] = useState('Hybrid')
+  const [salaryMin, setSalaryMin] = useState('')
+  const [salaryMax, setSalaryMax] = useState('')
+  const [jobType, setJobType] = useState('')
+  const [noticePeriod, setNoticePeriod] = useState('')
+  const [companiesToAvoid, setCompaniesToAvoid] = useState('')
+  const [dailyTime, setDailyTime] = useState('')
+  const [errors, setErrors] = useState<PreferenceErrors>({})
+  const [isReady, setIsReady] = useState(false)
+
+  const toggleRole = (role: string) => {
+    setRoles((currentRoles) => currentRoles.includes(role) ? currentRoles.filter((currentRole) => currentRole !== role) : [...currentRoles, role])
+    setIsReady(false)
+  }
+
+  const submitPreferences = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const nextErrors: PreferenceErrors = {}
+    const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(dailyTime)
+    const minimumSalary = Number(salaryMin)
+    const maximumSalary = Number(salaryMax)
+
+    if (roles.length === 0) nextErrors.roles = 'Choose at least one target role.'
+    if (!skills.trim()) nextErrors.skills = 'Add the skills you want us to match.'
+    if (!experience || Number(experience) < 0) nextErrors.experience = 'Enter your years of experience.'
+    if (!location.trim() && workPreference !== 'Remote') nextErrors.location = 'Add a city for Hybrid or On-site roles.'
+    if (!salaryMin || !salaryMax || minimumSalary < 0 || maximumSalary < 0 || minimumSalary > maximumSalary) nextErrors.salary = 'Enter a valid range where the minimum is not higher than the maximum.'
+    if (!jobType) nextErrors.jobType = 'Choose a job type.'
+    if (!noticePeriod) nextErrors.notice = 'Choose your notice period.'
+    if (!validTime) nextErrors.time = 'Choose a valid daily search time in India time.'
+
+    setErrors(nextErrors)
+    setIsReady(Object.keys(nextErrors).length === 0)
+  }
+
+  return (
+    <main className="preferences-shell">
+      <header className="preference-topbar">
+        <button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button>
+        <a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a>
+        <span className="preference-stage">Your job brief</span>
+      </header>
+
+      <div className="preferences-layout">
+        <aside className="preferences-intro">
+          <p className="eyebrow">YOUR NEXT MOVE</p>
+          <h1>Tell us what better looks like.</h1>
+          <p>These details shape the roles you receive. You can change them before a later search.</p>
+          <ol className="brief-path">
+            <li><span>1</span><div><strong>Choose your direction</strong><small>Roles, skills and experience</small></div></li>
+            <li><span>2</span><div><strong>Set your boundaries</strong><small>Location, salary and job type</small></div></li>
+            <li><span>3</span><div><strong>Pick your daily time</strong><small>One search each day, India time</small></div></li>
+          </ol>
+        </aside>
+
+        <section className="preferences-panel" aria-labelledby="preferences-heading">
+          <div className="panel-heading">
+            <p className="eyebrow">Preferences</p>
+            <h2 id="preferences-heading">Build your job brief</h2>
+            <p>Fields marked with <b>*</b> are needed before we can search.</p>
+          </div>
+
+          <form noValidate onSubmit={submitPreferences}>
+            <fieldset className="preference-fieldset">
+              <legend>Target roles <b>*</b></legend>
+              <div className="role-pills">
+                {roleOptions.map((role) => <button aria-pressed={roles.includes(role)} className={roles.includes(role) ? 'role-pill selected' : 'role-pill'} key={role} onClick={() => toggleRole(role)} type="button">{role}</button>)}
+              </div>
+              {errors.roles && <p className="field-error" role="alert">{errors.roles}</p>}
+            </fieldset>
+
+            <label className="form-field">
+              <span>Skills <b>*</b></span>
+              <input aria-invalid={Boolean(errors.skills)} onChange={(event) => { setSkills(event.target.value); setIsReady(false) }} placeholder="e.g. SQL, user research, React" type="text" value={skills} />
+              <small>Separate skills with commas.</small>
+              {errors.skills && <p className="field-error" role="alert">{errors.skills}</p>}
+            </label>
+
+            <div className="form-two-up">
+              <label className="form-field">
+                <span>Years of experience <b>*</b></span>
+                <input aria-invalid={Boolean(errors.experience)} inputMode="decimal" min="0" onChange={(event) => { setExperience(event.target.value); setIsReady(false) }} placeholder="e.g. 4" type="number" value={experience} />
+                {errors.experience && <p className="field-error" role="alert">{errors.experience}</p>}
+              </label>
+              <label className="form-field">
+                <span>City</span>
+                <input aria-invalid={Boolean(errors.location)} onChange={(event) => { setLocation(event.target.value); setIsReady(false) }} placeholder="e.g. Bengaluru" type="text" value={location} />
+                {errors.location && <p className="field-error" role="alert">{errors.location}</p>}
+              </label>
+            </div>
+
+            <fieldset className="preference-fieldset">
+              <legend>Work preference <b>*</b></legend>
+              <div className="segmented-options">
+                {workPreferences.map((preference) => <button aria-pressed={workPreference === preference} className={workPreference === preference ? 'segment selected' : 'segment'} key={preference} onClick={() => { setWorkPreference(preference); setIsReady(false) }} type="button">{preference}</button>)}
+              </div>
+            </fieldset>
+
+            <fieldset className="preference-fieldset salary-fieldset">
+              <legend>Expected annual salary, in lakh rupees <b>*</b></legend>
+              <div className="salary-inputs">
+                <label><span>Minimum</span><input aria-invalid={Boolean(errors.salary)} inputMode="numeric" min="0" onChange={(event) => { setSalaryMin(event.target.value); setIsReady(false) }} placeholder="10" type="number" value={salaryMin} /></label>
+                <span className="salary-to" aria-hidden="true">to</span>
+                <label><span>Maximum</span><input aria-invalid={Boolean(errors.salary)} inputMode="numeric" min="0" onChange={(event) => { setSalaryMax(event.target.value); setIsReady(false) }} placeholder="16" type="number" value={salaryMax} /></label>
+              </div>
+              {errors.salary && <p className="field-error" role="alert">{errors.salary}</p>}
+            </fieldset>
+
+            <div className="form-two-up">
+              <label className="form-field">
+                <span>Job type <b>*</b></span>
+                <select aria-invalid={Boolean(errors.jobType)} onChange={(event) => { setJobType(event.target.value); setIsReady(false) }} value={jobType}>
+                  <option value="">Choose job type</option>
+                  {jobTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+                {errors.jobType && <p className="field-error" role="alert">{errors.jobType}</p>}
+              </label>
+              <label className="form-field">
+                <span>Notice period <b>*</b></span>
+                <select aria-invalid={Boolean(errors.notice)} onChange={(event) => { setNoticePeriod(event.target.value); setIsReady(false) }} value={noticePeriod}>
+                  <option value="">Choose notice period</option>
+                  <option value="Immediately">Immediately</option>
+                  <option value="15 days">15 days</option>
+                  <option value="30 days">30 days</option>
+                  <option value="60 days">60 days</option>
+                  <option value="90 days">90 days</option>
+                </select>
+                {errors.notice && <p className="field-error" role="alert">{errors.notice}</p>}
+              </label>
+            </div>
+
+            <label className="form-field optional-field">
+              <span>Companies to avoid</span>
+              <input onChange={(event) => setCompaniesToAvoid(event.target.value)} placeholder="Optional · e.g. Example Corp, Sample Systems" type="text" value={companiesToAvoid} />
+            </label>
+
+            <fieldset className="preference-fieldset schedule-fieldset">
+              <legend>Daily search time <b>*</b></legend>
+              <p>We will search once a day at this time in India Standard Time. Use 24-hour time, for example 09:30.</p>
+              <label className="time-input"><input aria-invalid={Boolean(errors.time)} aria-label="Daily search time in India time" inputMode="numeric" maxLength={5} onChange={(event) => { setDailyTime(event.target.value); setIsReady(false) }} placeholder="09:30" type="text" value={dailyTime} /><span>IST</span></label>
+              {errors.time && <p className="field-error" role="alert">{errors.time}</p>}
+            </fieldset>
+
+            <button className="save-preferences" type="submit">Check my preferences <span aria-hidden="true">→</span></button>
+            {isReady && <p className="form-success" role="status"><span aria-hidden="true">●</span> Preferences are ready. Sign in is the next step so your resume stays private.</p>}
+          </form>
+        </section>
+      </div>
+    </main>
+  )
+}
+
 function App() {
+  const [screen, setScreen] = useState<'landing' | 'preferences'>('landing')
   const [briefReady, setBriefReady] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
-  const [authIntent, setAuthIntent] = useState<'signIn' | 'signUp'>('signIn')
+  const [authIntent, setAuthIntent] = useState<AuthMode>('signIn')
   const [jobAction, setJobAction] = useState('On Hold')
+  const { isAuthenticated, isLoading } = useConvexAuth()
+  const { signOut } = useAuthActions()
+
+  const openBrief = () => {
+    setBriefReady(true)
+    if (isAuthenticated) {
+      setScreen('preferences')
+      return
+    }
+    setAuthIntent('signUp')
+    setSignInOpen(true)
+  }
+
+  if (screen === 'preferences') return <PreferencesScreen onBack={() => setScreen('landing')} />
 
   return (
     <main className="app-shell" id="top">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
         <nav aria-label="Landing page navigation" className="topbar-actions">
-          <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>
-          <button className="get-started" onClick={() => { setAuthIntent('signUp'); setSignInOpen(true) }} type="button">Get started</button>
+          {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOut()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
+          {!isAuthenticated && <button className="get-started" onClick={() => { setAuthIntent('signUp'); setSignInOpen(true) }} type="button">Get started</button>}
         </nav>
       </header>
 
@@ -23,7 +273,7 @@ function App() {
           <p className="intro">CareerPilot turns your resume and preferences into one daily brief of active roles worth opening.</p>
 
           <div className="hero-actions">
-            <button className="build-brief" onClick={() => setBriefReady(true)} type="button">
+            <button className="build-brief" onClick={openBrief} type="button">
               {briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
             </button>
           </div>
@@ -109,16 +359,7 @@ function App() {
         <a className="closing-link" href="#top">Build my job brief <span aria-hidden="true">↑</span></a>
       </section>
 
-      {signInOpen && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => setSignInOpen(false)}>
-          <section aria-labelledby="sign-in-title" className="sign-in-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-            <button aria-label="Close sign in" className="close-button" onClick={() => setSignInOpen(false)} type="button">×</button>
-            <p className="eyebrow">{authIntent === 'signUp' ? 'Start your search' : 'Welcome back'}</p>
-            <h2 id="sign-in-title">{authIntent === 'signUp' ? 'Create your CareerPilot account.' : 'Sign in to CareerPilot.'}</h2>
-            <p>Google and email account access are part of Milestone 6. This entry point is ready for that real flow.</p>
-          </section>
-        </div>
-      )}
+      {!isAuthenticated && signInOpen && <AuthDialog initialMode={authIntent} onClose={() => setSignInOpen(false)} />}
     </main>
   )
 }
