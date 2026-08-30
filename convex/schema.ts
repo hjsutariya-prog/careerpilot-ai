@@ -62,4 +62,70 @@ export default defineSchema({
   })
     .index("by_import", ["importId"])
     .index("by_owner", ["ownerId"]),
+  jobs: defineTable({
+    sourceToken: v.string(),
+    externalJobId: v.string(),
+    title: v.string(),
+    companyName: v.string(),
+    normalizedCompany: v.string(),
+    locationLabel: v.string(),
+    cities: v.array(v.string()),
+    description: v.string(),
+    skills: v.array(v.string()),
+    applyUrl: v.string(),
+    lastUpdatedAt: v.number(),
+    firstSeenAt: v.number(),
+    lastSeenAt: v.number(),
+    isActive: v.boolean(),
+    closedAt: v.optional(v.number()),
+  })
+    .index("by_source_external", ["sourceToken", "externalJobId"])
+    .index("by_active_updated", ["isActive", "lastUpdatedAt"]),
+  jobSnapshots: defineTable({
+    jobId: v.id("jobs"),
+    snapshotDate: v.string(),
+    isActive: v.boolean(),
+    observedAt: v.number(),
+  }).index("by_job_date", ["jobId", "snapshotDate"]),
+  sourceRuns: defineTable({
+    sourceToken: v.string(),
+    status: v.union(v.literal("running"), v.literal("success"), v.literal("failed")),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    recordsFetched: v.optional(v.number()),
+    activeRetained: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    error: v.optional(v.string()),
+  }).index("by_source_started", ["sourceToken", "startedAt"]),
+  searchRuns: defineTable({
+    ownerId: v.string(),
+    kind: v.union(v.literal("first"), v.literal("daily")),
+    status: v.union(v.literal("queued"), v.literal("fetching"), v.literal("matching"), v.literal("complete"), v.literal("failed")),
+    requestedAt: v.number(),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    resultCount: v.optional(v.number()),
+    sourceWarning: v.optional(v.string()),
+    error: v.optional(v.string()),
+  }).index("by_owner_requested", ["ownerId", "requestedAt"]),
+  jobSuggestions: defineTable({
+    ownerId: v.string(),
+    searchRunId: v.id("searchRuns"),
+    jobId: v.id("jobs"),
+    rank: v.number(),
+    matchScore: v.number(),
+    matchExplanation: v.string(),
+    isRelatedMatch: v.boolean(),
+  })
+    .index("by_search_rank", ["searchRunId", "rank"])
+    .index("by_search_job", ["searchRunId", "jobId"]),
+  searchSchedules: defineTable({
+    ownerId: v.string(),
+    dailyTime: v.string(),
+    nextRunAt: v.number(),
+    lastRunIstDate: v.optional(v.string()),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_next_run", ["nextRunAt"]),
 });
