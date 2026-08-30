@@ -6,6 +6,12 @@ export type FirstSearchSetup = {
   hasPreviousSearch: boolean;
 };
 
+export type DueSchedule = {
+  ownerId: string;
+  nextRunAt: number;
+  lastRunIstDate?: string;
+};
+
 export function planFirstSearch(setup: FirstSearchSetup) {
   if (!setup.hasResume || !setup.hasPreferences || setup.hasPreviousSearch) return null;
   return { kind: "first" as const, delayMs: 0 };
@@ -28,4 +34,12 @@ export function nextRunAtForIst(dailyTime: string, now: number) {
   ) - IST_OFFSET_MS;
 
   return candidate > now ? candidate : candidate + 24 * 60 * 60 * 1000;
+}
+
+export function istDateAt(timestamp: number) {
+  return new Date(timestamp + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+export function dueSchedules<T extends DueSchedule>(schedules: readonly T[], now: number, currentIstDate = istDateAt(now)) {
+  return schedules.filter((schedule) => schedule.nextRunAt <= now && schedule.lastRunIstDate !== currentIstDate);
 }

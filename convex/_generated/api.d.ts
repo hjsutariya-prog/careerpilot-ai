@@ -10,6 +10,7 @@
 
 import type * as auth from "../auth.js";
 import type * as connections from "../connections.js";
+import type * as crons from "../crons.js";
 import type * as greenhouse from "../greenhouse.js";
 import type * as greenhouseNormalization from "../greenhouseNormalization.js";
 import type * as greenhouseRefresh from "../greenhouseRefresh.js";
@@ -31,6 +32,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   connections: typeof connections;
+  crons: typeof crons;
   greenhouse: typeof greenhouse;
   greenhouseNormalization: typeof greenhouseNormalization;
   greenhouseRefresh: typeof greenhouseRefresh;

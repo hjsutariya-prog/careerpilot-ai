@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { getLiveSuggestions } from "./searchMatching";
-import { nextRunAtForIst, planFirstSearch } from "./searchScheduling";
+import { dueSchedules, istDateAt, nextRunAtForIst, planFirstSearch } from "./searchScheduling";
 
 export type SuggestionInput = {
   jobId: string;
@@ -113,6 +113,31 @@ export const requestFirstSearch = mutation({
   handler: async (ctx) => {
     const ownerId = await requireOwner(ctx);
     await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
+  },
+});
+
+export const queueDueDailySearches = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const currentIstDate = istDateAt(now);
+    const scheduled = await ctx.db
+      .query("searchSchedules")
+      .withIndex("by_next_run", (q) => q.lte("nextRunAt", now))
+      .take(100);
+    const due = dueSchedules(scheduled, now, currentIstDate);
+
+    for (const schedule of due) {
+      const searchRunId = await ctx.db.insert("searchRuns", { ownerId: schedule.ownerId, kind: "daily", status: "queued", requestedAt: now });
+      await ctx.db.patch(schedule._id, {
+        lastRunIstDate: currentIstDate,
+        nextRunAt: nextRunAtForIst(schedule.dailyTime, now),
+        updatedAt: now,
+      });
+      await ctx.scheduler.runAfter(0, internal.searches.runSearch, { searchRunId });
+    }
+
+    return { queued: due.length };
   },
 });
 
