@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { GreenhouseApiJob } from "./greenhouseNormalization";
 import { prepareSuccessfulSourceRefresh, buildGreenhouseJobsUrl } from "./greenhouseRefresh";
 import { greenhouseSources } from "./greenhouseSources";
+import { isAllowedAdminEmail } from "./adminAccess";
 
 const normalizedJobValidator = v.object({
   sourceToken: v.string(),
@@ -28,6 +29,12 @@ function utcSnapshotDate(timestamp: number) {
 
 function readableError(error: unknown) {
   return error instanceof Error ? error.message.slice(0, 500) : "Greenhouse returned an unknown error.";
+}
+
+async function requireAdmin(ctx: { auth: { getUserIdentity: () => Promise<{ email?: string } | null> } }) {
+  const identity = await ctx.auth.getUserIdentity();
+  const environment = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
+  if (!isAllowedAdminEmail(identity?.email, environment.process?.env?.CAREERPILOT_ADMIN_EMAIL)) throw new Error("Admin access required.");
 }
 
 function isGreenhouseJob(value: unknown): value is GreenhouseApiJob {
@@ -146,5 +153,15 @@ export const refreshInventory = internalAction({
     }
 
     return outcomes;
+  },
+});
+
+/** Starts the existing inventory refresh immediately, without waiting for the daily schedule. */
+export const adminRequestRefresh = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    await ctx.scheduler.runAfter(0, internal.greenhouse.refreshInventory, { reason: "daily" });
+    return { queued: true };
   },
 });

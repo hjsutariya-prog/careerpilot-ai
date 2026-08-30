@@ -92,6 +92,7 @@ export default defineSchema({
     jobId: v.id("jobs"),
     jobLastUpdatedAt: v.number(),
     status: v.union(v.literal("queued"), v.literal("generating"), v.literal("ready"), v.literal("failed")),
+    origin: v.optional(v.union(v.literal("manual"), v.literal("gemini"), v.literal("default"))),
     summary: v.optional(v.string()),
     responsibilities: v.optional(v.array(v.string())),
     skills: v.optional(v.array(v.string())),

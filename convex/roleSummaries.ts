@@ -2,6 +2,8 @@ import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { isAllowedAdminEmail } from "./adminAccess";
+import { planRoleSummaryRefresh } from "./roleSummaryRefresh";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 
@@ -36,9 +38,48 @@ type GeminiRoleSummary = {
   suitableFor: string;
 };
 
+type ListingSummaryInput = {
+  title: string;
+  companyName: string;
+  locationLabel: string;
+  description: string;
+  skills: string[];
+};
+
 function cleanText(value: unknown, limit: number) {
   if (typeof value !== "string") return "";
   return value.replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function listingSentences(value: string) {
+  return cleanText(value, 12_000)
+    .split(/(?<=[.!?])\s+(?=[A-Z])|\s+(?=(?:Responsibilities|Key Responsibilities|What You'll Do|What You Will Do|Requirements|Qualifications|Skills)\b)/i)
+    .map((sentence) => cleanText(sentence, 260))
+    .filter((sentence) => sentence.length >= 35);
+}
+
+/** A clear, non-AI fallback saved from facts already present in a public listing. */
+export function createListingRoleSummary(job: ListingSummaryInput): GeminiRoleSummary {
+  const namedSkills = job.skills.map((skill) => cleanText(skill, 80)).filter(Boolean).slice(0, 6);
+  const sentences = listingSentences(job.description);
+  const responsibilityStart = sentences.findIndex((sentence) => /(?:responsibilities|what you(?:'|’)ll do|what you will do|your impact|you will)/i.test(sentence));
+  const firstResponsibility = sentences[responsibilityStart] ?? "";
+  const startsWithHeading = /^(?:responsibilities|key responsibilities|what you(?:'|’)ll do|what you will do|your impact)\b[:\-]?$/i.test(firstResponsibility);
+  const responsibilitySource = responsibilityStart >= 0 ? sentences.slice(responsibilityStart + (startsWithHeading ? 1 : 0)) : sentences;
+  const responsibilities = responsibilitySource.slice(0, 5);
+  const focus = namedSkills.length > 0 ? namedSkills.join(", ") : "the responsibilities described in the listing";
+  const location = cleanText(job.locationLabel, 120);
+
+  return {
+    summary: `${cleanText(job.title, 180)} at ${cleanText(job.companyName, 180)} is a role${location ? ` based in ${location}` : ""}. The listing focuses on ${focus}.`,
+    responsibilities: responsibilities.length > 0
+      ? responsibilities
+      : ["Review the original company listing for the day-to-day responsibilities of this role."],
+    skills: namedSkills,
+    suitableFor: namedSkills.length > 0
+      ? `It suits candidates whose experience matches the stated role requirements, including ${namedSkills.slice(0, 3).join(", ")}.`
+      : "It suits candidates whose experience matches the responsibilities and requirements in the original listing.",
+  };
 }
 
 export function parseGeminiRoleSummary(value: string): GeminiRoleSummary | null {
@@ -63,6 +104,12 @@ async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subj
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Please sign in before viewing an AI role summary.");
   return identity.subject;
+}
+
+async function requireAdmin(ctx: { auth: { getUserIdentity: () => Promise<{ email?: string } | null> } }) {
+  const identity = await ctx.auth.getUserIdentity();
+  const environment = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
+  if (!isAllowedAdminEmail(identity?.email, environment.process?.env?.CAREERPILOT_ADMIN_EMAIL)) throw new Error("Admin access required.");
 }
 
 async function jobIsInLatestBrief(ctx: { db: any }, ownerId: string, jobId: Id<"jobs">) {
@@ -100,6 +147,7 @@ export const request = mutation({
     const job = await ctx.db.get(args.jobId);
     if (!job) throw new Error("This role is no longer available.");
     const existing = await ctx.db.query("jobRoleSummaries").withIndex("by_job", (index) => index.eq("jobId", args.jobId)).unique();
+    if (existing?.origin === "manual") return { status: existing.status };
     const generatingRecently = existing?.status === "generating" && existing.startedAt && Date.now() - existing.startedAt < 15_000;
     if (existing && existing.jobLastUpdatedAt === job.lastUpdatedAt && (existing.status === "ready" || existing.status === "queued" || generatingRecently)) return { status: existing.status };
 
@@ -137,7 +185,92 @@ export const markReady = internalMutation({
   handler: async (ctx, args) => {
     const saved = await ctx.db.get(args.summaryId);
     if (!saved) return;
-    await ctx.db.patch(args.summaryId, { status: "ready", ...args.result, generatedAt: Date.now(), failureMessage: undefined });
+    await ctx.db.patch(args.summaryId, { status: "ready", origin: "gemini", ...args.result, generatedAt: Date.now(), failureMessage: undefined });
+  },
+});
+
+const manualResultValidator = v.object({ summary: v.string(), responsibilities: v.array(v.string()), skills: v.array(v.string()), suitableFor: v.string() });
+
+export const adminSaveManual = mutation({
+  args: { jobId: v.id("jobs"), result: manualResultValidator },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx);
+    const job = await ctx.db.get(args.jobId);
+    if (!job) throw new Error("This role no longer exists.");
+    const existing = await ctx.db.query("jobRoleSummaries").withIndex("by_job", (index) => index.eq("jobId", args.jobId)).unique();
+    const values = { jobLastUpdatedAt: job.lastUpdatedAt, status: "ready" as const, origin: "manual" as const, ...args.result, generatedAt: Date.now(), failureMessage: undefined, startedAt: undefined };
+    if (existing) await ctx.db.patch(existing._id, values);
+    else await ctx.db.insert("jobRoleSummaries", { jobId: args.jobId, ...values });
+  },
+});
+
+/**
+ * Saves a readable fallback for every active role that is not protected as a
+ * manually written summary. This cancels any queued Gemini work for those rows
+ * because `generate` only processes rows whose status is still `queued`.
+ */
+export const adminSaveListingFallbacks = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const jobs = await ctx.db.query("jobs").withIndex("by_active_updated", (index) => index.eq("isActive", true)).collect();
+    const saved = await ctx.db.query("jobRoleSummaries").collect();
+    const byJobId = new Map(saved.map((summary) => [String(summary.jobId), summary]));
+    let created = 0;
+    let updated = 0;
+    let skippedManual = 0;
+
+    for (const job of jobs) {
+      const existing = byJobId.get(String(job._id));
+      if (existing?.origin === "manual") {
+        skippedManual += 1;
+        continue;
+      }
+      const result = createListingRoleSummary(job);
+      const values = {
+        jobLastUpdatedAt: job.lastUpdatedAt,
+        status: "ready" as const,
+        origin: "default" as const,
+        ...result,
+        generatedAt: Date.now(),
+        failureMessage: undefined,
+        startedAt: undefined,
+      };
+      if (existing) {
+        await ctx.db.patch(existing._id, values);
+        updated += 1;
+      } else {
+        await ctx.db.insert("jobRoleSummaries", { jobId: job._id, ...values });
+        created += 1;
+      }
+    }
+    return { created, updated, skippedManual };
+  },
+});
+
+export const adminQueueGeminiRefresh = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireAdmin(ctx);
+    const jobs = await ctx.db.query("jobs").withIndex("by_active_updated", (index) => index.eq("isActive", true)).collect();
+    const summaries = await ctx.db.query("jobRoleSummaries").collect();
+    const plan = planRoleSummaryRefresh(
+      jobs.map((job) => ({ id: String(job._id), lastUpdatedAt: job.lastUpdatedAt, isActive: job.isActive })),
+      summaries.map((summary) => ({ jobId: String(summary.jobId), jobLastUpdatedAt: summary.jobLastUpdatedAt, status: summary.status, origin: summary.origin })),
+    );
+    const jobsById = new Map(jobs.map((job) => [String(job._id), job]));
+    const summariesByJob = new Map(summaries.map((summary) => [String(summary.jobId), summary]));
+
+    for (const [position, jobId] of plan.jobIds.entries()) {
+      const job = jobsById.get(jobId)!;
+      const existing = summariesByJob.get(jobId);
+      const summaryId = existing
+        ? (await ctx.db.patch(existing._id, { jobLastUpdatedAt: job.lastUpdatedAt, status: "queued", summary: undefined, responsibilities: undefined, skills: undefined, suitableFor: undefined, startedAt: undefined, generatedAt: undefined, failureMessage: undefined }), existing._id)
+        : await ctx.db.insert("jobRoleSummaries", { jobId: job._id, jobLastUpdatedAt: job.lastUpdatedAt, status: "queued" });
+      await ctx.scheduler.runAfter(position * 3_000, internal.roleSummaries.generate, { summaryId });
+    }
+
+    return { queued: plan.jobIds.length, skippedManual: plan.skippedManual, skippedInProgress: plan.skippedInProgress };
   },
 });
 
