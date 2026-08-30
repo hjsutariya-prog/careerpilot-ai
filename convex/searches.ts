@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { getLiveSuggestions } from "./searchMatching";
 import { dueSchedules, istDateAt, nextRunAtForIst, planFirstSearch } from "./searchScheduling";
 
@@ -47,14 +48,41 @@ export const latestMine = query({
       .order("desc")
       .collect())[0] ?? null;
 
-    if (!latestSearch) return { search: null, suggestions: [] };
+    if (!latestSearch) return { search: null, suggestions: [], sourceHealth: [] };
 
-    const suggestions = await ctx.db
+    const suggestionRows = await ctx.db
       .query("jobSuggestions")
       .withIndex("by_search_rank", (q) => q.eq("searchRunId", latestSearch._id))
       .collect();
+    const suggestions = await Promise.all(suggestionRows.map(async (suggestion) => ({ ...suggestion, job: await ctx.db.get(suggestion.jobId) })));
 
-    return { search: latestSearch, suggestions };
+    const latestBySource = new Map<string, { status: "success" | "failed"; completedAt: number | undefined; error: string | undefined }>();
+    const sourceRuns = await ctx.db.query("sourceRuns").collect();
+    for (const sourceRun of sourceRuns) {
+      const current = latestBySource.get(sourceRun.sourceToken);
+      if (!current || (sourceRun.completedAt ?? 0) > (current.completedAt ?? 0)) {
+        latestBySource.set(sourceRun.sourceToken, { status: sourceRun.status === "success" ? "success" : "failed", completedAt: sourceRun.completedAt, error: sourceRun.error });
+      }
+    }
+
+    return { search: latestSearch, suggestions, sourceHealth: [...latestBySource.entries()].map(([sourceToken, source]) => ({ sourceToken, ...source })) };
+  },
+});
+
+export const trackedJobsMine = query({
+  args: {},
+  handler: async (ctx) => {
+    const ownerId = await requireOwner(ctx);
+    const actions = await ctx.db.query("jobActions").withIndex("by_owner", (q) => q.eq("ownerId", ownerId)).collect();
+    const tracked = await Promise.all(actions.map(async (action) => {
+      try {
+        const job = await ctx.db.get(action.jobId as Id<"jobs">);
+        return job ? { action, job } : null;
+      } catch {
+        return null;
+      }
+    }));
+    return tracked.filter((item): item is NonNullable<typeof item> => item !== null);
   },
 });
 

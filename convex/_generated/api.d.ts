@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as adminAccess from "../adminAccess.js";
 import type * as auth from "../auth.js";
 import type * as connections from "../connections.js";
 import type * as crons from "../crons.js";
@@ -22,6 +23,7 @@ import type * as resumes from "../resumes.js";
 import type * as searchMatching from "../searchMatching.js";
 import type * as searchScheduling from "../searchScheduling.js";
 import type * as searches from "../searches.js";
+import type * as sourceHealth from "../sourceHealth.js";
 
 import type {
   ApiFromModules,
@@ -30,6 +32,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  adminAccess: typeof adminAccess;
   auth: typeof auth;
   connections: typeof connections;
   crons: typeof crons;
@@ -44,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   searchMatching: typeof searchMatching;
   searchScheduling: typeof searchScheduling;
   searches: typeof searches;
+  sourceHealth: typeof sourceHealth;
 }>;
 
 /**

@@ -7,6 +7,9 @@ import { ResumeUpload } from './ResumeUpload'
 import { ResultsScreen } from './ResultsScreen'
 import { TrackerScreen } from './TrackerScreen'
 import { ConnectionsScreen } from './ConnectionsScreen'
+import { SourceHealthScreen } from './SourceHealthScreen'
+import { DashboardShell } from './DashboardShell'
+import { getDashboardStartScreen, type DashboardScreen } from './dashboardRouting'
 
 const popularRoleOptions = ['Product Manager', 'Business Analyst', 'Data Analyst', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer']
 const roleOptions = [
@@ -92,7 +95,7 @@ function AuthDialog({ initialMode, onClose }: { initialMode: AuthMode; onClose: 
   )
 }
 
-function PreferencesScreen({ onBack, onViewResults }: { onBack: () => void; onViewResults: () => void }) {
+function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedded?: boolean; onBack: () => void; onViewResults: () => void }) {
   const savedPreferences = useQuery(api.preferences.mine)
   const savedResume = useQuery(api.resumes.mine)
   const savePreferences = useMutation(api.preferences.save)
@@ -219,11 +222,11 @@ function PreferencesScreen({ onBack, onViewResults }: { onBack: () => void; onVi
   }
 
   return (
-    <main className="preferences-shell">
-      <header className="preference-topbar">
+    <main className={embedded ? 'preferences-shell dashboard-preferences-shell' : 'preferences-shell'}>
+      {!embedded && <header className="preference-topbar">
         <button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button>
         <a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a>
-      </header>
+      </header>}
 
       <div className="preferences-layout">
         <aside className="preferences-intro">
@@ -357,7 +360,7 @@ function PreferencesScreen({ onBack, onViewResults }: { onBack: () => void; onVi
 }
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'preferences' | 'resume' | 'results' | 'tracker' | 'connections'>('landing')
+  const [screen, setScreen] = useState<'landing' | DashboardScreen>('landing')
   const [briefReady, setBriefReady] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
   const [authIntent, setAuthIntent] = useState<AuthMode>('signIn')
@@ -366,6 +369,7 @@ function App() {
   const { signOut } = useAuthActions()
   const savedPreferences = useQuery(api.preferences.mine, isAuthenticated ? {} : 'skip')
   const savedResume = useQuery(api.resumes.mine, isAuthenticated ? {} : 'skip')
+  const canViewSourceHealth = useQuery(api.sourceHealth.isAdmin, isAuthenticated ? {} : 'skip')
   const hasRoutedSignedInUser = useRef(false)
 
   useEffect(() => {
@@ -376,34 +380,38 @@ function App() {
     if (hasRoutedSignedInUser.current || savedPreferences === undefined || savedResume === undefined) return
 
     hasRoutedSignedInUser.current = true
-    const shouldOpenResume = briefReady || window.sessionStorage.getItem('careerpilot:open-resume') === 'true'
     window.sessionStorage.removeItem('careerpilot:open-resume')
     setBriefReady(false)
     setSignInOpen(false)
 
-    if (savedPreferences && savedResume) {
-      setScreen('results')
-      return
-    }
-    if (shouldOpenResume) setScreen('resume')
-  }, [briefReady, isAuthenticated, savedPreferences, savedResume])
+    setScreen(getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)))
+  }, [isAuthenticated, savedPreferences, savedResume])
 
-  const openBrief = () => {
+  const openDashboard = () => {
     if (isAuthenticated) {
-      setScreen('resume')
+      setScreen(getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)))
       return
     }
-    window.sessionStorage.setItem('careerpilot:open-resume', 'true')
     setBriefReady(true)
     setAuthIntent('signUp')
     setSignInOpen(true)
   }
 
-  if (screen === 'preferences') return <PreferencesScreen onBack={() => setScreen('landing')} onViewResults={() => setScreen('results')} />
-  if (screen === 'resume') return <ResumeUpload onBack={() => setScreen('landing')} onContinue={() => setScreen('preferences')} />
-  if (screen === 'results') return <ResultsScreen onBack={() => setScreen('landing')} onEditPreferences={() => setScreen('preferences')} onOpenConnections={() => setScreen('connections')} onOpenTracker={() => setScreen('tracker')} />
-  if (screen === 'tracker') return <TrackerScreen onBack={() => setScreen('landing')} onOpenBrief={() => setScreen('results')} />
-  if (screen === 'connections') return <ConnectionsScreen onBack={() => setScreen('results')} />
+  if (screen !== 'landing') {
+    const signOutFromDashboard = async () => {
+      await signOut()
+      setScreen('landing')
+    }
+
+    return <DashboardShell active={screen} isAdmin={canViewSourceHealth === true} onHome={() => setScreen('landing')} onNavigate={setScreen} onSignOut={() => void signOutFromDashboard()}>
+      {screen === 'apply' && <ResultsScreen embedded onBack={() => setScreen('landing')} onEditPreferences={() => setScreen('preferences')} onOpenConnections={() => setScreen('connections')} onOpenTracker={() => setScreen('tracker')} />}
+      {screen === 'resume' && <ResumeUpload embedded onBack={() => setScreen('landing')} onContinue={() => setScreen('preferences')} />}
+      {screen === 'preferences' && <PreferencesScreen embedded onBack={() => setScreen('landing')} onViewResults={() => setScreen('apply')} />}
+      {screen === 'tracker' && <TrackerScreen embedded onBack={() => setScreen('landing')} onOpenBrief={() => setScreen('apply')} />}
+      {screen === 'connections' && <ConnectionsScreen embedded onBack={() => setScreen('apply')} />}
+      {screen === 'source-health' && canViewSourceHealth === true && <SourceHealthScreen embedded onBack={() => setScreen('apply')} />}
+    </DashboardShell>
+  }
 
   return (
     <main className="app-shell" id="top">
@@ -411,7 +419,7 @@ function App() {
         <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
         <nav aria-label="Landing page navigation" className="topbar-actions">
           {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOut()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
-          {isAuthenticated ? <button className="get-started" onClick={openBrief} type="button">Upload resume</button> : <button className="get-started" onClick={openBrief} type="button">Get started</button>}
+          {isAuthenticated ? <button className="get-started" onClick={openDashboard} type="button">Open dashboard</button> : <button className="get-started" onClick={openDashboard} type="button">Get started</button>}
         </nav>
       </header>
 
@@ -421,8 +429,8 @@ function App() {
           <p className="intro">CareerPilot turns your resume and preferences into one daily brief of active roles worth opening.</p>
 
           <div className="hero-actions">
-            <button className="build-brief" onClick={openBrief} type="button">
-              {isAuthenticated ? 'Upload my resume' : briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
+            <button className="build-brief" onClick={openDashboard} type="button">
+              {isAuthenticated ? 'Open dashboard' : briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
             </button>
           </div>
         </div>
@@ -504,7 +512,7 @@ function App() {
       <section className="closing-call" aria-labelledby="closing-heading">
         <p className="eyebrow">CareerPilot.AI</p>
         <h2 id="closing-heading">Your next job search deserves a smaller to-do list.</h2>
-        <button className="closing-link" onClick={openBrief} type="button">Build my job brief <span aria-hidden="true">↑</span></button>
+        <button className="closing-link" onClick={openDashboard} type="button">Build my job brief <span aria-hidden="true">↑</span></button>
       </section>
 
       {!isAuthenticated && signInOpen && <AuthDialog initialMode={authIntent} onClose={() => setSignInOpen(false)} />}

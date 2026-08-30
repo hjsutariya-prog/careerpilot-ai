@@ -23,7 +23,7 @@ async function readableText(file: File) {
   return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value.trim()
 }
 
-export function ResumeUpload({ onBack, onContinue }: { onBack: () => void; onContinue: () => void }) {
+export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedded?: boolean; onBack: () => void; onContinue: () => void }) {
   const generateUploadUrl = useMutation(api.resumes.generateUploadUrl)
   const saveResume = useMutation(api.resumes.save)
   const removeResume = useMutation(api.resumes.removeMine)
@@ -71,11 +71,11 @@ export function ResumeUpload({ onBack, onContinue }: { onBack: () => void; onCon
   const displayFile = uploadedFile ?? (savedResume ? { name: savedResume.fileName, size: savedResume.sizeBytes } : null)
   const success = Boolean(displayFile)
 
-  return <main className="resume-shell">
-    <header className="preference-topbar resume-topbar">
+  return <main className={embedded ? 'resume-shell dashboard-resume-shell' : 'resume-shell'}>
+    {!embedded && <header className="preference-topbar resume-topbar">
       <button className="back-home" onClick={onBack} type="button">← Home</button>
       <span className="brand">CareerPilot<span>.AI</span></span>
-    </header>
+    </header>}
     <section className="resume-panel">
       <h1>Bring your experience.<br /><em>We’ll carry the rest.</em></h1>
       <p>Your resume helps us find jobs that fit you.</p>

@@ -10,7 +10,7 @@ function formatImportDate(value: number) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 }
 
-export function ConnectionsScreen({ onBack }: { onBack: () => void }) {
+export function ConnectionsScreen({ embedded = false, onBack }: { embedded?: boolean; onBack: () => void }) {
   const savedConnections = useQuery(api.connections.mine)
   const startImport = useMutation(api.connections.startImport)
   const saveBatch = useMutation(api.connections.saveBatch)
@@ -76,11 +76,11 @@ export function ConnectionsScreen({ onBack }: { onBack: () => void }) {
   const previewErrors = preview?.errors.slice(0, 5) ?? []
 
   return (
-    <main className="connections-shell">
-      <header className="preference-topbar results-topbar">
+    <main className={embedded ? 'connections-shell dashboard-connections-shell' : 'connections-shell'}>
+      {!embedded && <header className="preference-topbar results-topbar">
         <button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Job brief</button>
         <a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a>
-      </header>
+      </header>}
 
       <section aria-labelledby="connections-heading" className="connections-content">
         <div className="connections-heading"><div><p className="eyebrow">YOUR CONNECTIONS</p><h1 id="connections-heading">Your network,<br /><em>where it matters.</em></h1><p>Import your LinkedIn Connections file. CareerPilot only looks for people whose current company matches a role in your brief.</p></div>{currentImport && <p className="connections-saved-count"><b>{currentConnections.length.toLocaleString('en-IN')}</b> connections<br />saved {formatImportDate(currentImport.importedAt)}</p>}</div>
