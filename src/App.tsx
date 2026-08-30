@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { useConvexAuth } from 'convex/react'
 import './App.css'
@@ -246,12 +246,23 @@ function App() {
   const { isAuthenticated, isLoading } = useConvexAuth()
   const { signOut } = useAuthActions()
 
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (briefReady || window.sessionStorage.getItem('careerpilot:open-resume') === 'true') {
+      window.sessionStorage.removeItem('careerpilot:open-resume')
+      setBriefReady(false)
+      setSignInOpen(false)
+      setScreen('resume')
+    }
+  }, [briefReady, isAuthenticated])
+
   const openBrief = () => {
-    setBriefReady(true)
     if (isAuthenticated) {
       setScreen('resume')
       return
     }
+    window.sessionStorage.setItem('careerpilot:open-resume', 'true')
+    setBriefReady(true)
     setAuthIntent('signUp')
     setSignInOpen(true)
   }
@@ -265,7 +276,7 @@ function App() {
         <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
         <nav aria-label="Landing page navigation" className="topbar-actions">
           {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOut()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
-          {!isAuthenticated && <button className="get-started" onClick={() => { setAuthIntent('signUp'); setSignInOpen(true) }} type="button">Get started</button>}
+          {isAuthenticated ? <button className="get-started" onClick={openBrief} type="button">Upload resume</button> : <button className="get-started" onClick={openBrief} type="button">Get started</button>}
         </nav>
       </header>
 
@@ -276,7 +287,7 @@ function App() {
 
           <div className="hero-actions">
             <button className="build-brief" onClick={openBrief} type="button">
-              {briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
+              {isAuthenticated ? 'Upload my resume' : briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
             </button>
           </div>
         </div>
@@ -358,7 +369,7 @@ function App() {
       <section className="closing-call" aria-labelledby="closing-heading">
         <p className="eyebrow">CareerPilot.AI</p>
         <h2 id="closing-heading">Your next job search deserves a smaller to-do list.</h2>
-        <a className="closing-link" href="#top">Build my job brief <span aria-hidden="true">↑</span></a>
+        <button className="closing-link" onClick={openBrief} type="button">Build my job brief <span aria-hidden="true">↑</span></button>
       </section>
 
       {!isAuthenticated && signInOpen && <AuthDialog initialMode={authIntent} onClose={() => setSignInOpen(false)} />}
