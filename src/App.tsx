@@ -1,130 +1,121 @@
 import { useState } from 'react'
 import './App.css'
 
-const roles = ['Frontend engineer', 'Backend engineer', 'Data analyst', 'QA engineer']
-const workStyles = ['Remote first', 'Hybrid', 'On-site']
-const salaryBands = ['₹10–16L', '₹16–24L', '₹24L+']
-
-const rolesPreview = {
-  'Frontend engineer': [
-    ['Senior Frontend Engineer', 'NovaCart', 'React · TypeScript · 5–7 years', '92%', 'Posted 3h ago'],
-    ['UI Platform Engineer', 'Metric Loop', 'Design systems · React · Remote', '88%', 'Posted today'],
-    ['Frontend Developer', 'Bright Grid', 'JavaScript · APIs · Product team', '83%', 'Posted yesterday'],
-  ],
-  'Backend engineer': [
-    ['Senior Backend Engineer', 'NovaCart', 'Node.js · PostgreSQL · APIs', '93%', 'Posted 2h ago'],
-    ['Platform Engineer', 'Metric Loop', 'Java · Cloud · Remote', '87%', 'Posted today'],
-    ['Backend Developer', 'Bright Grid', 'Python · Services · Product team', '82%', 'Posted yesterday'],
-  ],
-  'Data analyst': [
-    ['Senior Data Analyst', 'NovaCart', 'SQL · Power BI · Product data', '91%', 'Posted 4h ago'],
-    ['Analytics Specialist', 'Metric Loop', 'Python · Metrics · Remote', '86%', 'Posted today'],
-    ['Business Data Analyst', 'Bright Grid', 'SQL · Dashboards · Stakeholders', '81%', 'Posted yesterday'],
-  ],
-  'QA engineer': [
-    ['Senior QA Engineer', 'NovaCart', 'Automation · APIs · Playwright', '90%', 'Posted 3h ago'],
-    ['Quality Engineer', 'Metric Loop', 'SDET · CI/CD · Remote', '85%', 'Posted today'],
-    ['QA Automation Engineer', 'Bright Grid', 'Java · Selenium · Product team', '80%', 'Posted yesterday'],
-  ],
-} as const
-
-function ChoiceRow({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (option: string) => void }) {
-  return (
-    <fieldset className="choice-row">
-      <legend>{label}</legend>
-      <div className="choice-options">
-        {options.map((option) => (
-          <button className={option === value ? 'choice selected' : 'choice'} key={option} onClick={() => onChange(option)} type="button">
-            {option}
-          </button>
-        ))}
-      </div>
-    </fieldset>
-  )
-}
-
 function App() {
-  const [role, setRole] = useState(roles[0])
-  const [workStyle, setWorkStyle] = useState(workStyles[0])
-  const [salary, setSalary] = useState(salaryBands[1])
   const [briefReady, setBriefReady] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
-  const examples = rolesPreview[role as keyof typeof rolesPreview]
+  const [authIntent, setAuthIntent] = useState<'signIn' | 'signUp'>('signIn')
+  const [jobAction, setJobAction] = useState('On Hold')
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" id="top">
       <header className="topbar">
         <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
-        <div className="topbar-actions">
-          <span className="availability">India IT roles</span>
-          <button className="sign-in" onClick={() => setSignInOpen(true)} type="button">Sign in</button>
-        </div>
+        <nav aria-label="Landing page navigation" className="topbar-actions">
+          <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>
+          <button className="get-started" onClick={() => { setAuthIntent('signUp'); setSignInOpen(true) }} type="button">Get started</button>
+        </nav>
       </header>
 
-      <section className="workbench" id="top" aria-labelledby="hero-heading">
+      <section className="workbench" aria-labelledby="hero-heading">
         <div className="brief-builder">
-          <p className="eyebrow">The daily brief, tuned to you</p>
-          <h1 id="hero-heading">Jobs worth<br />opening.</h1>
-          <p className="intro">A few clear preferences turn an endless feed into a small set of active roles you can act on with confidence.</p>
+          <h1 id="hero-heading">The right tech roles,<span className="headline-tail"><em>without</em> the endless search.</span></h1>
+          <p className="intro">CareerPilot turns your resume and preferences into one daily brief of active roles worth opening.</p>
 
-          <div className="choice-stack">
-            <ChoiceRow label="Target role" onChange={setRole} options={roles} value={role} />
-            <ChoiceRow label="Work style" onChange={setWorkStyle} options={workStyles} value={workStyle} />
-            <ChoiceRow label="Expected salary" onChange={setSalary} options={salaryBands} value={salary} />
+          <div className="hero-actions">
+            <button className="build-brief" onClick={() => setBriefReady(true)} type="button">
+              {briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
+            </button>
           </div>
+        </div>
+      </section>
 
-          <button className="build-brief" onClick={() => setBriefReady(true)} type="button">
-            {briefReady ? 'Brief ready for your resume' : 'Show my kind of roles'} <span aria-hidden="true">→</span>
-          </button>
-          <p className="small-print">Your resume upload comes next. CareerPilot never applies without your review.</p>
+      <section className="story" id="how-it-works" aria-labelledby="story-heading">
+        <div className="story-intro">
+          <p className="eyebrow">One daily search. A clear next step.</p>
+          <h2 id="story-heading">The work around job hunting is the work we remove.</h2>
         </div>
 
-        <aside className={briefReady ? 'match-preview ready' : 'match-preview'} aria-live="polite" aria-label="Example daily job brief">
-          <div className="preview-head">
-            <div>
-              <p className="eyebrow">Example daily brief</p>
-              <h2>Here is what<br />better looks like.</h2>
+        <article className="story-chapter resume-chapter">
+          <div className="chapter-copy">
+            <p className="chapter-number">01 / YOUR EXPERIENCE</p>
+            <h3>Start from the work you have already done.</h3>
+            <p>Upload one readable PDF or DOCX resume. CareerPilot uses your roles, skills and experience with the preferences you set.</p>
+          </div>
+          <div className="resume-paper" aria-label="Resume upload example">
+            <div className="document-tab">RESUME</div>
+            <p className="resume-file">rakesh_resume.pdf</p>
+            <p className="resume-meta">Readable · 6 years experience</p>
+            <div className="resume-lines" aria-hidden="true"><i /><i /><i /><i /></div>
+            <div className="skill-signals"><span>React</span><span>TypeScript</span><span>APIs</span></div>
+            <p className="paper-note">The useful signals, without asking you to type your CV again.</p>
+          </div>
+        </article>
+
+        <article className="story-chapter freshness-chapter">
+          <div className="chapter-copy">
+            <p className="chapter-number">02 / FRESH ROLES ONLY</p>
+            <h3>Open roles get the front row.</h3>
+            <p>Each brief shows up to 10 India IT roles. Newer open listings come first; related roles appear only when stronger matches run short.</p>
+          </div>
+          <div className="freshness-board" aria-label="Freshness rules example">
+            <p className="board-label">WHAT MAKES THE LIST</p>
+            <div className="freshness-rule"><span className="rule-dot lime" /><div><strong>Still open</strong><small>The original application link must work.</small></div></div>
+            <div className="freshness-rule"><span className="rule-dot teal" /><div><strong>Posted within 60 days</strong><small>Older roles stay out of your brief.</small></div></div>
+            <div className="freshness-rule"><span className="rule-dot coral" /><div><strong>Checked again</strong><small>Every result shows when it was last checked.</small></div></div>
+          </div>
+        </article>
+
+        <article className="story-chapter actions-chapter">
+          <div className="chapter-copy">
+            <p className="chapter-number">03 / MAKE A MOVE</p>
+            <h3>Keep your decision visible, even when it is “not now.”</h3>
+            <p>Apply opens the company’s own application page. Reject and On Hold keep the decision with the job so you do not rediscover the same role later.</p>
+          </div>
+          <div className="action-playground" aria-live="polite">
+            <p className="playground-label">SAMPLE ROLE · FRONTEND ENGINEER</p>
+            <h4>What do you want to do with this one?</h4>
+            <div className="action-options">
+              {['Apply', 'On Hold', 'Reject'].map((action) => (
+                <button aria-pressed={jobAction === action} className={jobAction === action ? `job-action ${action.toLowerCase().replace(' ', '-') } chosen` : `job-action ${action.toLowerCase().replace(' ', '-') }`} key={action} onClick={() => setJobAction(action)} type="button">
+                  {action}
+                </button>
+              ))}
             </div>
-            <span className="preview-tag">Preview only</span>
+            <p className="action-result"><span aria-hidden="true">●</span> {jobAction === 'Apply' ? 'Ready to open the company’s application page.' : jobAction === 'Reject' ? 'Marked as not for you. It will stay out of your active list.' : 'Saved for a better time. You can return to it in your tracker.'}</p>
           </div>
+        </article>
 
-          <div className="signal-summary">
-            <span><i /> Tuned for {role}</span>
-            <p>{workStyle} · {salary}</p>
+        <article className="story-chapter connections-chapter">
+          <div className="chapter-copy">
+            <p className="chapter-number">04 / FIND A FAMILIAR NAME</p>
+            <h3>See connections where the role is.</h3>
+            <p>Import your LinkedIn connections CSV. CareerPilot matches people only when their current company is the company hiring.</p>
           </div>
+          <div className="connection-scene" aria-label="Company connection match example">
+            <div className="csv-slip"><span>CSV</span><p>My Connections</p><small>842 contacts imported</small></div>
+            <div className="company-orbit">
+              <p>NovaCart</p><span>Hiring company</span>
+              <i className="person person-one">A</i><i className="person person-two">K</i><i className="person person-three">M</i>
+            </div>
+            <p className="connection-result">3 people at NovaCart</p>
+          </div>
+        </article>
+      </section>
 
-          <div className="job-stack">
-            {examples.map(([title, company, detail, score, freshness], index) => (
-              <article className={`job-card job-card-${index + 1}`} key={title}>
-                <div className="job-card-top">
-                  <span className="company-mark" aria-hidden="true">{company.slice(0, 1)}</span>
-                  <span className="freshness">{freshness}</span>
-                </div>
-                <h3>{title}</h3>
-                <p className="company-name">{company}</p>
-                <p className="job-detail">{detail}</p>
-                <footer>
-                  <span className="match-score">{score} match</span>
-                  <span>Why it fits ↗</span>
-                </footer>
-              </article>
-            ))}
-          </div>
-
-          <div className="preview-footer">
-            <p>{briefReady ? 'Next: upload your resume. CareerPilot will rank real open roles against your experience.' : 'Change the signals on the left—the brief responds before you even upload a resume.'}</p>
-            <span>{briefReady ? 'READY' : 'TUNING'}</span>
-          </div>
-        </aside>
+      <section className="closing-call" aria-labelledby="closing-heading">
+        <p className="eyebrow">CareerPilot.AI</p>
+        <h2 id="closing-heading">Your next job search deserves a smaller to-do list.</h2>
+        <a className="closing-link" href="#top">Build my job brief <span aria-hidden="true">↑</span></a>
       </section>
 
       {signInOpen && (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => setSignInOpen(false)}>
           <section aria-labelledby="sign-in-title" className="sign-in-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
             <button aria-label="Close sign in" className="close-button" onClick={() => setSignInOpen(false)} type="button">×</button>
-            <p className="eyebrow">Welcome back</p>
-            <h2 id="sign-in-title">Sign in arrives with account setup.</h2>
-            <p>Google and email sign-in are part of Milestone 6. This entry point is ready for that real flow.</p>
+            <p className="eyebrow">{authIntent === 'signUp' ? 'Start your search' : 'Welcome back'}</p>
+            <h2 id="sign-in-title">{authIntent === 'signUp' ? 'Create your CareerPilot account.' : 'Sign in to CareerPilot.'}</h2>
+            <p>Google and email account access are part of Milestone 6. This entry point is ready for that real flow.</p>
           </section>
         </div>
       )}
