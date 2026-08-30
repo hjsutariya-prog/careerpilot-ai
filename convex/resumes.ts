@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
   const identity = await ctx.auth.getUserIdentity();
@@ -19,7 +20,9 @@ export const save = mutation({
   args: { storageId: v.id("_storage"), fileName: v.string(), mimeType: v.string(), sizeBytes: v.number(), extractedTextLength: v.number(), detectedSkills: v.array(v.string()) },
   handler: async (ctx, args) => {
     const ownerId = await requireOwner(ctx);
-    return await ctx.db.insert("resumes", { ...args, ownerId, uploadedAt: Date.now() });
+    const resumeId = await ctx.db.insert("resumes", { ...args, ownerId, uploadedAt: Date.now() });
+    await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
+    return resumeId;
   },
 });
 

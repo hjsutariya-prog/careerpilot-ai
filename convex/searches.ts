@@ -1,5 +1,8 @@
 import { v } from "convex/values";
-import { internalMutation, query } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { getLiveSuggestions } from "./searchMatching";
+import { nextRunAtForIst, planFirstSearch } from "./searchScheduling";
 
 export type SuggestionInput = {
   jobId: string;
@@ -63,7 +66,7 @@ export const createRun = internalMutation({
 });
 
 export const saveSuggestions = internalMutation({
-  args: { ownerId: v.string(), searchRunId: v.id("searchRuns"), suggestions: v.array(suggestionValidator) },
+  args: { ownerId: v.string(), searchRunId: v.id("searchRuns"), suggestions: v.array(suggestionValidator), sourceWarning: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const searchRun = await ctx.db.get(args.searchRunId);
     if (!searchRun || searchRun.ownerId !== args.ownerId) throw new Error("This search run is not available for that user.");
@@ -78,6 +81,130 @@ export const saveSuggestions = internalMutation({
       if (!existing) await ctx.db.insert("jobSuggestions", { ...suggestion, jobId, ownerId: args.ownerId, searchRunId: args.searchRunId });
     }
 
-    await ctx.db.patch(args.searchRunId, { status: "complete", completedAt: Date.now(), resultCount: uniqueSuggestions.length });
+    await ctx.db.patch(args.searchRunId, { status: "complete", completedAt: Date.now(), resultCount: uniqueSuggestions.length, sourceWarning: args.sourceWarning });
+  },
+});
+
+export const ensureFirstSearch = internalMutation({
+  args: { ownerId: v.string() },
+  handler: async (ctx, args) => {
+    const preferences = await ctx.db.query("preferences").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).first();
+    const resume = await ctx.db.query("resumes").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).order("desc").first();
+    if (!preferences) return { firstQueued: false, reason: "preferences-missing" };
+
+    const nextRunAt = nextRunAtForIst(preferences.dailyTime, Date.now());
+    const existingSchedule = await ctx.db.query("searchSchedules").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).unique();
+    const scheduleRecord = { dailyTime: preferences.dailyTime, nextRunAt, updatedAt: Date.now() };
+    if (existingSchedule) await ctx.db.patch(existingSchedule._id, scheduleRecord);
+    else await ctx.db.insert("searchSchedules", { ownerId: args.ownerId, ...scheduleRecord });
+
+    const previousSearches = await ctx.db.query("searchRuns").withIndex("by_owner_requested", (q) => q.eq("ownerId", args.ownerId)).collect();
+    const setup = planFirstSearch({ hasResume: Boolean(resume), hasPreferences: true, hasPreviousSearch: previousSearches.some((search) => search.kind === "first" && search.status !== "failed") });
+    if (!setup) return { firstQueued: false, reason: resume ? "first-search-already-started" : "resume-missing" };
+
+    const searchRunId = await ctx.db.insert("searchRuns", { ownerId: args.ownerId, kind: setup.kind, status: "queued", requestedAt: Date.now() });
+    await ctx.scheduler.runAfter(setup.delayMs, internal.searches.runSearch, { searchRunId });
+    return { firstQueued: true, searchRunId };
+  },
+});
+
+export const requestFirstSearch = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const ownerId = await requireOwner(ctx);
+    await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
+  },
+});
+
+export const runById = internalQuery({
+  args: { searchRunId: v.id("searchRuns") },
+  handler: async (ctx, args) => await ctx.db.get(args.searchRunId),
+});
+
+export const matchingInputForOwner = internalQuery({
+  args: { ownerId: v.string() },
+  handler: async (ctx, args) => {
+    const preferences = await ctx.db.query("preferences").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).first();
+    if (!preferences) return null;
+    return {
+      roles: preferences.roles,
+      skills: preferences.skills,
+      cities: preferences.cities ?? (preferences.city ? [preferences.city] : []),
+      workPreferences: preferences.workPreferences ?? (preferences.workPreference ? [preferences.workPreference] : []),
+      companiesToAvoid: preferences.companiesToAvoid,
+    };
+  },
+});
+
+export const activeJobsForMatching = internalQuery({
+  args: {},
+  handler: async (ctx) => await ctx.db.query("jobs").withIndex("by_active_updated", (q) => q.eq("isActive", true)).order("desc").collect(),
+});
+
+export const inventoryFreshness = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const sourceRuns = await ctx.db.query("sourceRuns").collect();
+    const successfulRuns = sourceRuns.filter((run) => run.status === "success" && run.completedAt);
+    return { latestSuccessfulRefreshAt: successfulRuns.reduce((latest, run) => Math.max(latest, run.completedAt ?? 0), 0) };
+  },
+});
+
+export const setSearchStatus = internalMutation({
+  args: {
+    searchRunId: v.id("searchRuns"),
+    status: v.union(v.literal("fetching"), v.literal("matching")),
+  },
+  handler: async (ctx, args) => {
+    const searchRun = await ctx.db.get(args.searchRunId);
+    if (!searchRun) throw new Error("This search run no longer exists.");
+    await ctx.db.patch(args.searchRunId, { status: args.status, startedAt: searchRun.startedAt ?? Date.now() });
+  },
+});
+
+export const failSearch = internalMutation({
+  args: { searchRunId: v.id("searchRuns"), error: v.string() },
+  handler: async (ctx, args) => {
+    const searchRun = await ctx.db.get(args.searchRunId);
+    if (!searchRun) return;
+    await ctx.db.patch(args.searchRunId, { status: "failed", completedAt: Date.now(), error: args.error });
+  },
+});
+
+export const runSearch = internalAction({
+  args: { searchRunId: v.id("searchRuns") },
+  handler: async (ctx, args) => {
+    const searchRun = await ctx.runQuery(internal.searches.runById, args);
+    if (!searchRun || searchRun.status === "complete" || searchRun.status === "failed") return;
+
+    const preferences = await ctx.runQuery(internal.searches.matchingInputForOwner, { ownerId: searchRun.ownerId });
+    if (!preferences) {
+      await ctx.runMutation(internal.searches.failSearch, { searchRunId: args.searchRunId, error: "Your job preferences are missing. Save them and try again." });
+      return;
+    }
+
+    await ctx.runMutation(internal.searches.setSearchStatus, { searchRunId: args.searchRunId, status: "fetching" });
+    const freshness = await ctx.runQuery(internal.searches.inventoryFreshness, {});
+    let failedSourceTokens: string[] = [];
+    if (Date.now() - freshness.latestSuccessfulRefreshAt > 15 * 60 * 1000) {
+      const outcomes = await ctx.runAction(internal.greenhouse.refreshInventory, { reason: searchRun.kind === "first" ? "first-search" : "daily" });
+      failedSourceTokens = outcomes.filter((outcome) => outcome.status === "failed").map((outcome) => outcome.sourceToken);
+      if (failedSourceTokens.length === outcomes.length) {
+        await ctx.runMutation(internal.searches.failSearch, { searchRunId: args.searchRunId, error: "We could not reach any approved Greenhouse source. Please try again later." });
+        return;
+      }
+    }
+
+    await ctx.runMutation(internal.searches.setSearchStatus, { searchRunId: args.searchRunId, status: "matching" });
+    const jobs = await ctx.runQuery(internal.searches.activeJobsForMatching, {});
+    const jobsById = new Map(jobs.map((job) => [String(job._id), job._id]));
+    const suggestions = getLiveSuggestions(preferences, jobs.map((job) => ({ id: String(job._id), title: job.title, companyName: job.companyName, cities: job.cities, locationLabel: job.locationLabel, skills: job.skills, description: job.description, lastUpdatedAt: job.lastUpdatedAt })));
+    const sourceWarning = failedSourceTokens.length > 0 ? `${failedSourceTokens.length} approved Greenhouse source${failedSourceTokens.length === 1 ? " was" : "s were"} unavailable for this search.` : undefined;
+    await ctx.runMutation(internal.searches.saveSuggestions, {
+      ownerId: searchRun.ownerId,
+      searchRunId: args.searchRunId,
+      suggestions: suggestions.map((suggestion) => ({ jobId: jobsById.get(suggestion.id)!, rank: suggestion.rank, matchScore: suggestion.matchScore, matchExplanation: suggestion.matchExplanation, isRelatedMatch: suggestion.isRelatedMatch })),
+      sourceWarning,
+    });
   },
 });

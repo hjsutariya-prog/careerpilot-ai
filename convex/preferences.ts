@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
   const identity = await ctx.auth.getUserIdentity();
@@ -44,9 +45,12 @@ export const save = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, record);
+      await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
       return existing._id;
     }
 
-    return await ctx.db.insert("preferences", record);
+    const preferenceId = await ctx.db.insert("preferences", record);
+    await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
+    return preferenceId;
   },
 });
