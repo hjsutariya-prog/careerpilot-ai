@@ -73,12 +73,10 @@ export function ResumeUpload({ onBack, onContinue }: { onBack: () => void; onCon
     <header className="preference-topbar resume-topbar">
       <button className="back-home" onClick={onBack} type="button">← Home</button>
       <span className="brand">CareerPilot<span>.AI</span></span>
-      <span className="preference-stage">01 / Resume</span>
     </header>
     <section className="resume-panel">
-      <p className="eyebrow">YOUR EXPERIENCE</p>
       <h1>Bring your experience.<br /><em>We’ll carry the rest.</em></h1>
-      <p>Upload one resume and CareerPilot will keep it private to this account.</p>
+      <p>Your resume helps us find jobs that fit you.</p>
       {!displayFile ? <label className="resume-drop">
         <input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={upload} type="file" />
         <span className="resume-mark" aria-hidden="true">↥</span>
@@ -87,14 +85,17 @@ export function ResumeUpload({ onBack, onContinue }: { onBack: () => void; onCon
         <span className="resume-upload-cta">{busy ? 'Uploading…' : 'Choose file'}</span>
       </label> : <section className="resume-saved" aria-label="Saved resume">
         <div className="saved-file-heading"><span className="resume-mark" aria-hidden="true">✓</span><div><strong>Resume added</strong><small>Saved privately to this account</small></div></div>
-        <div className="saved-file-name"><span className="file-badge">{displayFile.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOCX'}</span><strong>{displayFile.name}</strong><small>{Math.max(1, Math.round(displayFile.size / 1024))} KB</small></div>
-        <div className="resume-file-actions">
-          <label className="resume-replace"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={upload} type="file" />Choose a different file</label>
-          <button className="resume-remove" disabled={busy} onClick={() => void remove()} type="button">Remove resume</button>
+        <div className="saved-file-name">
+          <span className="file-badge">{displayFile.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOCX'}</span>
+          <div className="saved-file-details"><strong>{displayFile.name}</strong><small>{Math.max(1, Math.round(displayFile.size / 1024))} KB</small></div>
+          <div className="file-icon-actions">
+            <label className="file-icon-action replace" title="Choose a different file"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Choose a different resume file" disabled={busy} onChange={upload} type="file" /><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></label>
+            <button aria-label="Remove resume" className="file-icon-action remove" disabled={busy} onClick={() => void remove()} title="Remove resume" type="button"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m-9 0 1 13h10l1-13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></button>
+          </div>
         </div>
       </section>}
       {message && <p className={message.startsWith('Resume saved') || message.startsWith('Resume removed') ? 'form-success' : 'field-error'} role="status">{message}</p>}
-      {success && <button className="save-preferences" onClick={onContinue} type="button">Continue to preferences <span>→</span></button>}
+      {success && <button className="save-preferences" onClick={onContinue} type="button">Set job preferences <span>→</span></button>}
     </section>
   </main>
 }
