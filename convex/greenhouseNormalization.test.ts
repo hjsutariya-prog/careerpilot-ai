@@ -18,7 +18,8 @@ describe("normalizeGreenhouseJob", () => {
       companyName: "GitLab",
       sourceToken: "gitlab",
       isIndiaItRole: true,
-      cities: ["Bengaluru"],
+    cities: ["Bengaluru"],
+    descriptionHtml: "<p>Build secure distributed software with TypeScript, APIs, and cloud services.</p>",
     });
   });
 

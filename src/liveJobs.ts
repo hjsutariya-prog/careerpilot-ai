@@ -4,6 +4,7 @@ export type LiveJobRecord = {
   companyName: string
   locationLabel: string
   description: string
+  descriptionHtml?: string
   skills: string[]
   applyUrl: string
   lastUpdatedAt: number
@@ -44,6 +45,7 @@ export function toLiveJobCard(suggestion: LiveSuggestionRecord) {
     cityLabel: job.locationLabel,
     workPreference: /\bremote\b/i.test(job.locationLabel) ? 'Remote' : 'India office',
     description: job.description,
+    descriptionHtml: job.descriptionHtml ?? null,
     skills: job.skills,
     applyUrl: job.applyUrl,
     matchScore: suggestion.matchScore,

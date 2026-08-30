@@ -1,11 +1,15 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
+import type { Id } from '../convex/_generated/dataModel'
 import { findCompanyConnections } from './connectionMatching'
-import { summarizeRoleDescription, toLiveJobCard } from './liveJobs'
+import { toLiveJobCard } from './liveJobs'
+import { createRoleBrief } from './roleBrief'
+import { FormattedJobDescription } from './FormattedJobDescription'
 import { getUndecidedJobs } from './trackerJobs'
 
 type JobActionStatus = 'Apply' | 'Reject' | 'On Hold'
+type JobCard = NonNullable<ReturnType<typeof toLiveJobCard>>
 
 type ResultsScreenProps = {
   embedded?: boolean
@@ -44,6 +48,35 @@ function ResultsLoading({ embedded, onBack }: Pick<ResultsScreenProps, 'embedded
   return <main className="results-shell"><header className="preference-topbar results-topbar"><button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button><a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a></header><section aria-live="polite" className="results-loading"><span aria-hidden="true" className="loading-orbit" /><p>Opening your live job brief…</p></section></main>
 }
 
+function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded: boolean; job: JobCard; isSaving: boolean; onBack: () => void; onSave: (jobId: string, status: JobActionStatus) => void }) {
+  const brief = createRoleBrief(job.description)
+  const aiSummary = useQuery(api.roleSummaries.mine, { jobId: job.id as Id<'jobs'> })
+  const requestAiSummary = useMutation(api.roleSummaries.request)
+  const [summaryRequestError, setSummaryRequestError] = useState('')
+
+  useEffect(() => {
+    void requestAiSummary({ jobId: job.id as Id<'jobs'> }).catch(() => setSummaryRequestError('We could not start the AI summary. Showing the listing-based summary instead.'))
+  }, [job.id, requestAiSummary])
+
+  const summary = aiSummary?.status === 'ready' ? aiSummary.summary : brief.summary
+  const responsibilities = aiSummary?.status === 'ready' ? aiSummary.responsibilities ?? [] : brief.responsibilities
+  const summaryNote = aiSummary?.status === 'ready'
+    ? 'AI summary based on the company listing'
+    : aiSummary?.status === 'queued' || aiSummary?.status === 'generating'
+      ? 'Preparing an AI summary. The original listing is ready below.'
+      : aiSummary?.status === 'failed'
+        ? aiSummary.failureMessage ?? 'Showing the listing-based summary instead.'
+        : summaryRequestError || 'Listing-based summary'
+
+  return <WorkspaceFrame embedded={embedded}>
+    <section className="role-focus-view" aria-labelledby="focused-role-title">
+      <header className="role-focus-header"><button className="role-focus-back" onClick={onBack} type="button"><span aria-hidden="true">←</span> Back to jobs</button><p>{job.freshnessLabel}</p></header>
+      <div className="role-focus-hero"><p className="eyebrow">ROLE OVERVIEW</p><div><div aria-hidden="true" className="workspace-company-mark">{job.companyName.slice(0, 1)}</div><p>{job.companyName}</p></div><h1 id="focused-role-title">{job.title}</h1><div className="role-focus-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span><span><b>{job.matchScore}</b> {matchLabel(job.matchScore, job.isRelatedMatch)}</span></div></div>
+      <div className="role-focus-layout"><section className="role-focus-main"><div className="role-focus-section"><p className="role-detail-label">Role summary</p>{summary ? <p className="role-focus-summary">{summary}</p> : <p className="role-focus-summary unavailable">This listing does not provide a separate role overview. The full company description is available below.</p>}<p className="role-summary-source" role={aiSummary?.status === 'queued' || aiSummary?.status === 'generating' ? 'status' : undefined}>{summaryNote}</p></div>{responsibilities.length > 0 && <div className="role-focus-section"><p className="role-detail-label">What you will work on</p><ol className="role-focus-responsibilities">{responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ol></div>}{aiSummary?.status === 'ready' && aiSummary.suitableFor && <div className="role-focus-section role-focus-suitable"><p className="role-detail-label">Best suited to</p><p>{aiSummary.suitableFor}</p></div>}<details className="role-focus-original"><summary>Open the original job description <span aria-hidden="true">↓</span></summary><FormattedJobDescription fallback={job.description} html={job.descriptionHtml} /></details></section><aside className="role-focus-side"><section><p className="role-detail-label">Why it fits</p><p>{job.matchReason}</p></section>{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).length > 0 && <section><p className="role-detail-label">Skills in this role</p><div className="role-skill-list">{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).slice(0, 8).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<a aria-disabled={isSaving} className="workspace-apply role-focus-apply" href={job.applyUrl} onClick={() => void onSave(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply on {job.companyName} <span aria-hidden="true">↗</span></a><div className="role-focus-actions"><button disabled={isSaving} onClick={() => void onSave(job.id, 'On Hold')} type="button">Hold this role</button><button className="reject" disabled={isSaving} onClick={() => void onSave(job.id, 'Reject')} type="button">Reject</button></div></aside></div>
+    </section>
+  </WorkspaceFrame>
+}
+
 export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onOpenTracker, onOpenConnections }: ResultsScreenProps) {
   const brief = useQuery(api.searches.latestMine)
   const savedActions = useQuery(api.jobActions.mine)
@@ -53,6 +86,7 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
   const [savingJobId, setSavingJobId] = useState<string | null>(null)
   const [actionError, setActionError] = useState('')
   const [isStartingSearch, setIsStartingSearch] = useState(false)
+  const [focusedJob, setFocusedJob] = useState<JobCard | null>(null)
 
   if (brief === undefined || savedActions === undefined || savedConnections === undefined) return <ResultsLoading embedded={embedded} onBack={onBack} />
 
@@ -86,6 +120,8 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
   const sourceFailures = brief.sourceHealth.filter((source) => source.status === 'failed')
   const checkedAt = search?.completedAt ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(search.completedAt)) : 'Results arrive within 15 minutes'
 
+  if (focusedJob) return <FocusedRoleView embedded={embedded} isSaving={savingJobId === focusedJob.id} job={focusedJob} onBack={() => setFocusedJob(null)} onSave={saveStatus} />
+
   return <WorkspaceFrame embedded={embedded}>
     {!embedded && <BriefSidebar jobCount={jobs.length} onBack={onBack} onEditPreferences={onEditPreferences} onOpenConnections={onOpenConnections} onOpenTracker={onOpenTracker} />}
     <section aria-labelledby="results-heading" className="brief-canvas">
@@ -112,7 +148,7 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
                       <div className="job-tile-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span></div>
                       <p className="job-tile-reason"><b>Why it fits</b> {job.matchReason}</p>
                       {matchingConnections.length > 0 && <section className="job-tile-connections"><p><b>Connections at {job.companyName}</b></p><div>{matchingConnections.slice(0, 2).map((connection) => connection.profileUrl ? <a href={connection.profileUrl} key={connection.profileUrl + connection.firstName + connection.lastName} rel="noreferrer" target="_blank"><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')} <i aria-hidden="true">↗</i></a> : <span className="workspace-connection-name" key={connection.firstName + connection.lastName + connection.company}><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')}</span>)}</div>{matchingConnections.length > 2 && <small>+{matchingConnections.length - 2} more in details</small>}</section>}
-                      <details className="job-tile-details"><summary><span><b>Quick read</b><small>Role overview and key skills</small></span><i aria-hidden="true">↓</i></summary><div className="role-detail-panel"><section><p className="role-detail-label">About this role</p><p className="role-detail-summary">{summarizeRoleDescription(job.description)}</p></section>{job.skills.length > 0 && <section><p className="role-detail-label">Skills named in the listing</p><div className="role-skill-list">{job.skills.slice(0, 6).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<a href={job.applyUrl} rel="noreferrer" target="_blank">Read the full description on {job.companyName} <span aria-hidden="true">↗</span></a></div></details>
+                      <section className="job-tile-summary"><p className="role-detail-label">Role summary</p><p>{createRoleBrief(job.description).summary ?? 'Open the role view for a structured summary and the full original description.'}</p><button onClick={() => setFocusedJob(job)} type="button">Open full role view <span aria-hidden="true">→</span></button></section>
                       <footer className="job-tile-footer"><div><p>{job.freshnessLabel}</p><small>{job.checkedLabel}</small></div><div className="job-tile-actions"><a aria-disabled={isSaving} className="workspace-apply" href={job.applyUrl} onClick={() => void saveStatus(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply <span aria-hidden="true">↗</span></a><button disabled={isSaving} onClick={() => void saveStatus(job.id, 'On Hold')} type="button">Hold</button><button className="reject" disabled={isSaving} onClick={() => void saveStatus(job.id, 'Reject')} type="button">Reject</button></div></footer>
                     </article>
                   })}

@@ -14,6 +14,7 @@ const normalizedJobValidator = v.object({
   locationLabel: v.string(),
   cities: v.array(v.string()),
   description: v.string(),
+  descriptionHtml: v.string(),
   skills: v.array(v.string()),
   applyUrl: v.string(),
   lastUpdatedAt: v.number(),

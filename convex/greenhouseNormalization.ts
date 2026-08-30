@@ -18,6 +18,7 @@ export type NormalizedGreenhouseJob = {
   locationLabel: string;
   cities: string[];
   description: string;
+  descriptionHtml: string;
   skills: string[];
   applyUrl: string;
   lastUpdatedAt: number;
@@ -70,6 +71,7 @@ function skillsFromText(value: string) {
 export function normalizeGreenhouseJob(source: GreenhouseSource, job: GreenhouseApiJob, observedAt: number): NormalizedGreenhouseJob | null {
   const locationLabel = job.location?.name?.trim() ?? "";
   const description = stripHtml(job.content ?? "");
+  const descriptionHtml = job.content?.trim() ?? "";
   const lastUpdatedAt = Date.parse(job.updated_at);
 
   if (!job.title.trim() || !locationLabel || !indiaPattern.test(locationLabel)) return null;
@@ -85,6 +87,7 @@ export function normalizeGreenhouseJob(source: GreenhouseSource, job: Greenhouse
     locationLabel,
     cities: citiesFromLocation(locationLabel),
     description,
+    descriptionHtml,
     skills: skillsFromText(`${job.title} ${description}`),
     applyUrl: job.absolute_url,
     lastUpdatedAt,

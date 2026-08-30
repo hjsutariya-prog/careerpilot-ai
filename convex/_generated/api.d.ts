@@ -20,6 +20,7 @@ import type * as http from "../http.js";
 import type * as jobActions from "../jobActions.js";
 import type * as preferences from "../preferences.js";
 import type * as resumes from "../resumes.js";
+import type * as roleSummaries from "../roleSummaries.js";
 import type * as searchMatching from "../searchMatching.js";
 import type * as searchScheduling from "../searchScheduling.js";
 import type * as searches from "../searches.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   jobActions: typeof jobActions;
   preferences: typeof preferences;
   resumes: typeof resumes;
+  roleSummaries: typeof roleSummaries;
   searchMatching: typeof searchMatching;
   searchScheduling: typeof searchScheduling;
   searches: typeof searches;
