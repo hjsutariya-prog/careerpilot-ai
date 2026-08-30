@@ -4,6 +4,9 @@ import { useConvexAuth, useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import './App.css'
 import { ResumeUpload } from './ResumeUpload'
+import { ResultsScreen } from './ResultsScreen'
+import { TrackerScreen } from './TrackerScreen'
+import { ConnectionsScreen } from './ConnectionsScreen'
 
 const popularRoleOptions = ['Product Manager', 'Business Analyst', 'Data Analyst', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer']
 const roleOptions = [
@@ -89,7 +92,7 @@ function AuthDialog({ initialMode, onClose }: { initialMode: AuthMode; onClose: 
   )
 }
 
-function PreferencesScreen({ onBack }: { onBack: () => void }) {
+function PreferencesScreen({ onBack, onViewResults }: { onBack: () => void; onViewResults: () => void }) {
   const savedPreferences = useQuery(api.preferences.mine)
   const savedResume = useQuery(api.resumes.mine)
   const savePreferences = useMutation(api.preferences.save)
@@ -345,6 +348,7 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
             <button className="save-preferences" disabled={isSaving} type="submit">{isSaving ? 'Saving preferences…' : 'Save job preferences'} <span aria-hidden="true">→</span></button>
             {errors.form && <p className="field-error" role="alert">{errors.form}</p>}
             {isReady && <p className="form-success" role="status"><span aria-hidden="true">●</span> Preferences saved. Your next brief will use these details.</p>}
+            {(isReady || savedPreferences) && <button className="view-brief" onClick={onViewResults} type="button">View my job brief <span aria-hidden="true">→</span></button>}
           </form>
         </section>
       </div>
@@ -353,23 +357,36 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
 }
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'preferences' | 'resume'>('landing')
+  const [screen, setScreen] = useState<'landing' | 'preferences' | 'resume' | 'results' | 'tracker' | 'connections'>('landing')
   const [briefReady, setBriefReady] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
   const [authIntent, setAuthIntent] = useState<AuthMode>('signIn')
   const [jobAction, setJobAction] = useState('On Hold')
   const { isAuthenticated, isLoading } = useConvexAuth()
   const { signOut } = useAuthActions()
+  const savedPreferences = useQuery(api.preferences.mine, isAuthenticated ? {} : 'skip')
+  const savedResume = useQuery(api.resumes.mine, isAuthenticated ? {} : 'skip')
+  const hasRoutedSignedInUser = useRef(false)
 
   useEffect(() => {
-    if (!isAuthenticated) return
-    if (briefReady || window.sessionStorage.getItem('careerpilot:open-resume') === 'true') {
-      window.sessionStorage.removeItem('careerpilot:open-resume')
-      setBriefReady(false)
-      setSignInOpen(false)
-      setScreen('resume')
+    if (!isAuthenticated) {
+      hasRoutedSignedInUser.current = false
+      return
     }
-  }, [briefReady, isAuthenticated])
+    if (hasRoutedSignedInUser.current || savedPreferences === undefined || savedResume === undefined) return
+
+    hasRoutedSignedInUser.current = true
+    const shouldOpenResume = briefReady || window.sessionStorage.getItem('careerpilot:open-resume') === 'true'
+    window.sessionStorage.removeItem('careerpilot:open-resume')
+    setBriefReady(false)
+    setSignInOpen(false)
+
+    if (savedPreferences && savedResume) {
+      setScreen('results')
+      return
+    }
+    if (shouldOpenResume) setScreen('resume')
+  }, [briefReady, isAuthenticated, savedPreferences, savedResume])
 
   const openBrief = () => {
     if (isAuthenticated) {
@@ -382,8 +399,11 @@ function App() {
     setSignInOpen(true)
   }
 
-  if (screen === 'preferences') return <PreferencesScreen onBack={() => setScreen('landing')} />
+  if (screen === 'preferences') return <PreferencesScreen onBack={() => setScreen('landing')} onViewResults={() => setScreen('results')} />
   if (screen === 'resume') return <ResumeUpload onBack={() => setScreen('landing')} onContinue={() => setScreen('preferences')} />
+  if (screen === 'results') return <ResultsScreen onBack={() => setScreen('landing')} onEditPreferences={() => setScreen('preferences')} onOpenConnections={() => setScreen('connections')} onOpenTracker={() => setScreen('tracker')} />
+  if (screen === 'tracker') return <TrackerScreen onBack={() => setScreen('landing')} onOpenBrief={() => setScreen('results')} />
+  if (screen === 'connections') return <ConnectionsScreen onBack={() => setScreen('results')} />
 
   return (
     <main className="app-shell" id="top">

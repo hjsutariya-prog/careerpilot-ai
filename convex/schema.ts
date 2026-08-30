@@ -31,4 +31,35 @@ export default defineSchema({
     dailyTime: v.string(),
     updatedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
+  jobActions: defineTable({
+    ownerId: v.string(),
+    jobId: v.string(),
+    status: v.union(v.literal("Apply"), v.literal("Reject"), v.literal("On Hold")),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_owner_job", ["ownerId", "jobId"]),
+  connectionImports: defineTable({
+    ownerId: v.string(),
+    fileName: v.string(),
+    totalRows: v.number(),
+    importedRows: v.number(),
+    errors: v.array(v.object({ rowNumber: v.number(), message: v.string() })),
+    status: v.union(v.literal("uploading"), v.literal("complete")),
+    importedAt: v.number(),
+  }).index("by_owner", ["ownerId"]),
+  connections: defineTable({
+    ownerId: v.string(),
+    importId: v.id("connectionImports"),
+    firstName: v.string(),
+    lastName: v.string(),
+    profileUrl: v.string(),
+    email: v.string(),
+    company: v.string(),
+    normalizedCompany: v.string(),
+    position: v.string(),
+    connectedOn: v.string(),
+  })
+    .index("by_import", ["importId"])
+    .index("by_owner", ["ownerId"]),
 });

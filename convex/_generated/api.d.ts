@@ -9,7 +9,9 @@
  */
 
 import type * as auth from "../auth.js";
+import type * as connections from "../connections.js";
 import type * as http from "../http.js";
+import type * as jobActions from "../jobActions.js";
 import type * as preferences from "../preferences.js";
 import type * as resumes from "../resumes.js";
 
@@ -21,7 +23,9 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
+  connections: typeof connections;
   http: typeof http;
+  jobActions: typeof jobActions;
   preferences: typeof preferences;
   resumes: typeof resumes;
 }>;
