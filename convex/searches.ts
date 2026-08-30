@@ -169,6 +169,27 @@ export const queueDueDailySearches = internalMutation({
   },
 });
 
+export const refreshAllScheduledBriefs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const currentIstDate = istDateAt(now);
+    const schedules = await ctx.db.query("searchSchedules").collect();
+
+    for (const schedule of schedules) {
+      const searchRunId = await ctx.db.insert("searchRuns", { ownerId: schedule.ownerId, kind: "daily", status: "queued", requestedAt: now });
+      await ctx.db.patch(schedule._id, {
+        lastRunIstDate: currentIstDate,
+        nextRunAt: nextRunAtForIst(schedule.dailyTime, now),
+        updatedAt: now,
+      });
+      await ctx.scheduler.runAfter(0, internal.searches.runSearch, { searchRunId });
+    }
+
+    return { queued: schedules.length };
+  },
+});
+
 export const runById = internalQuery({
   args: { searchRunId: v.id("searchRuns") },
   handler: async (ctx, args) => await ctx.db.get(args.searchRunId),
