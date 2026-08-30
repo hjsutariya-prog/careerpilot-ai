@@ -2,8 +2,16 @@ import { useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 
-type JobActionStatus = 'Apply' | 'Reject' | 'On Hold'
+type JobActionStatus = 'Apply' | 'Reject' | 'On Hold' | 'Resume shortlisted' | 'Interview'
 type TrackedItem = NonNullable<ReturnType<typeof useQuery<typeof api.searches.trackedJobsMine>>>[number]
+
+const alternateStatuses: Record<JobActionStatus, readonly JobActionStatus[]> = {
+  Apply: ['Resume shortlisted', 'Interview', 'On Hold', 'Reject'],
+  'Resume shortlisted': ['Interview', 'Apply', 'On Hold', 'Reject'],
+  Interview: ['Apply', 'On Hold', 'Reject'],
+  'On Hold': ['Apply', 'Resume shortlisted', 'Interview', 'Reject'],
+  Reject: ['Apply', 'Resume shortlisted', 'Interview', 'On Hold'],
+}
 
 function formatSavedDate(value: number) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
@@ -12,7 +20,7 @@ function TrackerJobRow({ item, savingJobId, onSave }: { item: TrackedItem; savin
   const { action, job } = item
   const jobId = String(job._id)
   const isSaving = savingJobId === jobId
-  const alternateActions = action.status === 'Apply' ? ['On Hold', 'Reject'] as const : action.status === 'On Hold' ? ['Apply', 'Reject'] as const : ['Apply', 'On Hold'] as const
+  const alternateActions = alternateStatuses[action.status]
 
   return <article className="tracker-job">
     <div className="tracker-job-main">
@@ -26,7 +34,7 @@ function TrackerJobRow({ item, savingJobId, onSave }: { item: TrackedItem; savin
   </article>
 }
 
-function TrackerSection({ title, items, savingJobId, onSave }: { title: 'Applied' | 'On Hold' | 'Rejected'; items: TrackedItem[]; savingJobId: string | null; onSave: (jobId: string, status: JobActionStatus) => void }) {
+function TrackerSection({ title, items, savingJobId, onSave }: { title: 'Applied' | 'Resume shortlisted' | 'Interview' | 'On Hold' | 'Rejected'; items: TrackedItem[]; savingJobId: string | null; onSave: (jobId: string, status: JobActionStatus) => void }) {
   return <section aria-labelledby={'tracker-' + title.toLowerCase().replace(' ', '-')} className={'tracker-section ' + title.toLowerCase().replace(' ', '-')}>
     <div className="tracker-section-heading"><h2 id={'tracker-' + title.toLowerCase().replace(' ', '-')}>{title}</h2><span>{items.length}</span></div>
     {items.length === 0 ? <p className="tracker-section-empty">No roles here yet.</p> : <div>{items.map((item) => <TrackerJobRow item={item} key={String(item.job._id)} onSave={onSave} savingJobId={savingJobId} />)}</div>}
@@ -54,6 +62,8 @@ export function TrackerScreen({ embedded = false, onBack, onOpenBrief }: { embed
   if (trackedJobs === undefined) return <main className={embedded ? 'tracker-shell dashboard-tracker-shell' : 'tracker-shell'}>{!embedded && <header className="preference-topbar results-topbar"><button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button><a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a></header>}<section aria-live="polite" className="results-loading"><span aria-hidden="true" className="loading-orbit" /><p>Opening your tracker…</p></section></main>
 
   const applied = trackedJobs.filter((item) => item.action.status === 'Apply')
+  const shortlisted = trackedJobs.filter((item) => item.action.status === 'Resume shortlisted')
+  const interview = trackedJobs.filter((item) => item.action.status === 'Interview')
   const onHold = trackedJobs.filter((item) => item.action.status === 'On Hold')
   const rejected = trackedJobs.filter((item) => item.action.status === 'Reject')
   const totalDecisions = trackedJobs.length
@@ -62,7 +72,7 @@ export function TrackerScreen({ embedded = false, onBack, onOpenBrief }: { embed
     {!embedded && <header className="preference-topbar results-topbar"><button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button><a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a><button className="tracker-open-brief" onClick={onOpenBrief} type="button">Open job brief <span aria-hidden="true">↗</span></button></header>}
     <section aria-labelledby="tracker-heading" className="tracker-content">
       <div className="tracker-heading"><div><p className="eyebrow">YOUR JOB TRACKER</p><h1 id="tracker-heading">Your decisions,<br /><em>in one place.</em></h1><p>Every role you act on moves out of your live brief and stays private to this account.</p></div><p className="tracker-total"><b>{totalDecisions}</b> decision{totalDecisions === 1 ? '' : 's'} saved</p></div>
-      {totalDecisions === 0 ? <section className="results-empty tracker-empty"><h2>No decisions saved yet.</h2><p>Choose Apply, On Hold, or Reject from a role in your live job brief. It will appear here and leave the brief.</p><button className="results-primary" onClick={onOpenBrief} type="button">Return to my job brief <span aria-hidden="true">→</span></button></section> : <div className="tracker-sections"><TrackerSection items={applied} onSave={saveStatus} savingJobId={savingJobId} title="Applied" /><TrackerSection items={onHold} onSave={saveStatus} savingJobId={savingJobId} title="On Hold" /><TrackerSection items={rejected} onSave={saveStatus} savingJobId={savingJobId} title="Rejected" /></div>}
+      {totalDecisions === 0 ? <section className="results-empty tracker-empty"><h2>No decisions saved yet.</h2><p>Choose Apply, On Hold, or Reject from a role in your live job brief. It will appear here and leave the brief.</p><button className="results-primary" onClick={onOpenBrief} type="button">Return to my job brief <span aria-hidden="true">→</span></button></section> : <div className="tracker-sections"><TrackerSection items={applied} onSave={saveStatus} savingJobId={savingJobId} title="Applied" /><TrackerSection items={shortlisted} onSave={saveStatus} savingJobId={savingJobId} title="Resume shortlisted" /><TrackerSection items={interview} onSave={saveStatus} savingJobId={savingJobId} title="Interview" /><TrackerSection items={onHold} onSave={saveStatus} savingJobId={savingJobId} title="On Hold" /><TrackerSection items={rejected} onSave={saveStatus} savingJobId={savingJobId} title="Rejected" /></div>}
       {error && <p className="field-error results-error" role="alert">{error}</p>}
     </section>
   </main>

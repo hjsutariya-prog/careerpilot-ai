@@ -1,18 +1,13 @@
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server'
+import { requireOwner } from './owner'
 
-async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) throw new Error('Please sign in before updating a job action.')
-  return identity.subject
-}
-
-const statusValidator = v.union(v.literal('Apply'), v.literal('Reject'), v.literal('On Hold'))
+const statusValidator = v.union(v.literal('Apply'), v.literal('Reject'), v.literal('On Hold'), v.literal('Resume shortlisted'), v.literal('Interview'))
 
 export const mine = query({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before updating a job action.')
     return await ctx.db
       .query('jobActions')
       .withIndex('by_owner', (q) => q.eq('ownerId', ownerId))
@@ -23,7 +18,7 @@ export const mine = query({
 export const save = mutation({
   args: { jobId: v.string(), status: statusValidator },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before updating a job action.')
     const existing = await ctx.db
       .query('jobActions')
       .withIndex('by_owner_job', (q) => q.eq('ownerId', ownerId).eq('jobId', args.jobId))

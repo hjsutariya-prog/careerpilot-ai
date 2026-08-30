@@ -1,6 +1,6 @@
 import type { SampleJob } from './data/sampleJobs'
 
-export type JobActionStatus = 'Apply' | 'Reject' | 'On Hold'
+export type JobActionStatus = 'Apply' | 'Reject' | 'On Hold' | 'Resume shortlisted' | 'Interview'
 
 export type StoredJobAction = {
   jobId: string
@@ -15,6 +15,8 @@ export type TrackedJob = {
 
 export type TrackedJobGroups = {
   applied: TrackedJob[]
+  shortlisted: TrackedJob[]
+  interview: TrackedJob[]
   onHold: TrackedJob[]
   rejected: TrackedJob[]
 }
@@ -26,7 +28,7 @@ export function getUndecidedJobs<T extends { id: string }>(jobs: T[], actions: R
 
 export function groupTrackedJobs(jobs: SampleJob[], actions: StoredJobAction[]): TrackedJobGroups {
   const jobsById = new Map(jobs.map((job) => [job.id, job]))
-  const groups: TrackedJobGroups = { applied: [], onHold: [], rejected: [] }
+  const groups: TrackedJobGroups = { applied: [], shortlisted: [], interview: [], onHold: [], rejected: [] }
 
   for (const action of actions) {
     const job = jobsById.get(action.jobId)
@@ -34,6 +36,8 @@ export function groupTrackedJobs(jobs: SampleJob[], actions: StoredJobAction[]):
 
     const trackedJob = { job, action }
     if (action.status === 'Apply') groups.applied.push(trackedJob)
+    if (action.status === 'Resume shortlisted') groups.shortlisted.push(trackedJob)
+    if (action.status === 'Interview') groups.interview.push(trackedJob)
     if (action.status === 'On Hold') groups.onHold.push(trackedJob)
     if (action.status === 'Reject') groups.rejected.push(trackedJob)
   }

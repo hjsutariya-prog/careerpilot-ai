@@ -4,7 +4,6 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { getLiveSuggestions } from "./searchMatching";
 import { dueSchedules, istDateAt, nextRunAtForIst, planFirstSearch } from "./searchScheduling";
-
 export type SuggestionInput = {
   jobId: string;
   rank: number;
@@ -24,11 +23,7 @@ export function dedupeSuggestionInputs<T extends SuggestionInput>(suggestions: r
   return [...strongestByJob.values()].sort((first, second) => first.rank - second.rank);
 }
 
-async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Please sign in before viewing a job brief.");
-  return identity.subject;
-}
+import { requireOwner } from "./owner";
 
 const suggestionValidator = v.object({
   jobId: v.id("jobs"),
@@ -41,7 +36,7 @@ const suggestionValidator = v.object({
 export const latestMine = query({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before viewing a job brief.");
     const latestSearch = (await ctx.db
       .query("searchRuns")
       .withIndex("by_owner_requested", (q) => q.eq("ownerId", ownerId))
@@ -72,7 +67,7 @@ export const latestMine = query({
 export const trackedJobsMine = query({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before viewing a job brief.");
     const actions = await ctx.db.query("jobActions").withIndex("by_owner", (q) => q.eq("ownerId", ownerId)).collect();
     const tracked = await Promise.all(actions.map(async (action) => {
       try {
@@ -139,7 +134,7 @@ export const ensureFirstSearch = internalMutation({
 export const requestFirstSearch = mutation({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before viewing a job brief.");
     await ctx.scheduler.runAfter(0, internal.searches.ensureFirstSearch, { ownerId });
   },
 });

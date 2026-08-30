@@ -1,6 +1,10 @@
 export type RefreshableJob = { id: string; lastUpdatedAt: number; isActive: boolean };
 export type StoredRoleSummary = { jobId: string; jobLastUpdatedAt: number; status: "queued" | "generating" | "ready" | "failed"; origin?: "manual" | "gemini" | "default" };
 
+export function takeRoleSummaryRefreshBatch(jobIds: readonly string[], batchSize = 20) {
+  return jobIds.slice(0, Math.min(Math.max(batchSize, 1), 20));
+}
+
 export function planRoleSummaryRefresh(jobs: readonly RefreshableJob[], summaries: readonly StoredRoleSummary[]) {
   const summaryByJob = new Map(summaries.map((summary) => [summary.jobId, summary]));
   const jobIds: string[] = [];

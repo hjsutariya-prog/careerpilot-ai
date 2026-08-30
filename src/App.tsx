@@ -367,17 +367,32 @@ function App() {
   const [jobAction, setJobAction] = useState('On Hold')
   const { isAuthenticated, isLoading } = useConvexAuth()
   const { signOut } = useAuthActions()
+  const recoverOwnerData = useMutation(api.accountRecovery.recoverMine)
   const savedPreferences = useQuery(api.preferences.mine, isAuthenticated ? {} : 'skip')
   const savedResume = useQuery(api.resumes.mine, isAuthenticated ? {} : 'skip')
   const canViewSourceHealth = useQuery(api.sourceHealth.isAdmin, isAuthenticated ? {} : 'skip')
   const hasRoutedSignedInUser = useRef(false)
+  const hasRecoveredOwnerData = useRef(false)
+  const [ownerDataReady, setOwnerDataReady] = useState(false)
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      hasRecoveredOwnerData.current = false
+      setOwnerDataReady(false)
+      return
+    }
+    if (hasRecoveredOwnerData.current) return
+
+    hasRecoveredOwnerData.current = true
+    void recoverOwnerData().catch(() => undefined).finally(() => setOwnerDataReady(true))
+  }, [isAuthenticated, recoverOwnerData])
 
   useEffect(() => {
     if (!isAuthenticated) {
       hasRoutedSignedInUser.current = false
       return
     }
-    if (hasRoutedSignedInUser.current || savedPreferences === undefined || savedResume === undefined) return
+    if (!ownerDataReady || hasRoutedSignedInUser.current || savedPreferences === undefined || savedResume === undefined) return
 
     hasRoutedSignedInUser.current = true
     window.sessionStorage.removeItem('careerpilot:open-resume')
@@ -385,7 +400,7 @@ function App() {
     setSignInOpen(false)
 
     setScreen(getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)))
-  }, [isAuthenticated, savedPreferences, savedResume])
+  }, [isAuthenticated, ownerDataReady, savedPreferences, savedResume])
 
   const openDashboard = () => {
     if (isAuthenticated) {

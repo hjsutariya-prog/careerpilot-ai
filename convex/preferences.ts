@@ -1,12 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
-
-async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Please sign in before saving preferences.");
-  return identity.subject;
-}
+import { requireOwner } from "./owner";
 
 const preferenceArgs = {
   roles: v.array(v.string()),
@@ -25,7 +20,7 @@ const preferenceArgs = {
 export const mine = query({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before saving preferences.");
     return await ctx.db
       .query("preferences")
       .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))
@@ -36,7 +31,7 @@ export const mine = query({
 export const save = mutation({
   args: preferenceArgs,
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before saving preferences.");
     const existing = await ctx.db
       .query("preferences")
       .withIndex("by_owner", (q) => q.eq("ownerId", ownerId))

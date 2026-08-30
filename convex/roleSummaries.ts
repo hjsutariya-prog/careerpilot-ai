@@ -3,7 +3,8 @@ import { internalAction, internalMutation, internalQuery, mutation, query } from
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { isAllowedAdminEmail } from "./adminAccess";
-import { planRoleSummaryRefresh } from "./roleSummaryRefresh";
+import { requireOwner } from "./owner";
+import { planRoleSummaryRefresh, takeRoleSummaryRefreshBatch } from "./roleSummaryRefresh";
 
 const GEMINI_MODEL = "gemini-3.6-flash";
 
@@ -100,12 +101,6 @@ export function parseGeminiRoleSummary(value: string): GeminiRoleSummary | null 
   }
 }
 
-async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Please sign in before viewing an AI role summary.");
-  return identity.subject;
-}
-
 async function requireAdmin(ctx: { auth: { getUserIdentity: () => Promise<{ email?: string } | null> } }) {
   const identity = await ctx.auth.getUserIdentity();
   const environment = globalThis as typeof globalThis & { process?: { env?: Record<string, string | undefined> } };
@@ -129,7 +124,7 @@ async function jobIsInLatestBrief(ctx: { db: any }, ownerId: string, jobId: Id<"
 export const mine = query({
   args: { jobId: v.id("jobs") },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before viewing an AI role summary.");
     if (!await jobIsInLatestBrief(ctx, ownerId, args.jobId)) throw new Error("That role is not in your current job brief.");
     const job = await ctx.db.get(args.jobId);
     if (!job) return null;
@@ -142,7 +137,7 @@ export const mine = query({
 export const request = mutation({
   args: { jobId: v.id("jobs") },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx);
+    const ownerId = await requireOwner(ctx, "Please sign in before viewing an AI role summary.");
     if (!await jobIsInLatestBrief(ctx, ownerId, args.jobId)) throw new Error("That role is not in your current job brief.");
     const job = await ctx.db.get(args.jobId);
     if (!job) throw new Error("This role is no longer available.");
@@ -249,8 +244,8 @@ export const adminSaveListingFallbacks = mutation({
 });
 
 export const adminQueueGeminiRefresh = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { batchSize: v.optional(v.number()) },
+  handler: async (ctx, args) => {
     await requireAdmin(ctx);
     const jobs = await ctx.db.query("jobs").withIndex("by_active_updated", (index) => index.eq("isActive", true)).collect();
     const summaries = await ctx.db.query("jobRoleSummaries").collect();
@@ -261,7 +256,8 @@ export const adminQueueGeminiRefresh = mutation({
     const jobsById = new Map(jobs.map((job) => [String(job._id), job]));
     const summariesByJob = new Map(summaries.map((summary) => [String(summary.jobId), summary]));
 
-    for (const [position, jobId] of plan.jobIds.entries()) {
+    const jobIds = takeRoleSummaryRefreshBatch(plan.jobIds, args.batchSize);
+    for (const [position, jobId] of jobIds.entries()) {
       const job = jobsById.get(jobId)!;
       const existing = summariesByJob.get(jobId);
       const summaryId = existing
@@ -270,7 +266,7 @@ export const adminQueueGeminiRefresh = mutation({
       await ctx.scheduler.runAfter(position * 3_000, internal.roleSummaries.generate, { summaryId });
     }
 
-    return { queued: plan.jobIds.length, skippedManual: plan.skippedManual, skippedInProgress: plan.skippedInProgress };
+    return { queued: jobIds.length, skippedManual: plan.skippedManual, skippedInProgress: plan.skippedInProgress };
   },
 });
 

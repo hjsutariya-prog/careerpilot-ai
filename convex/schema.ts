@@ -34,7 +34,7 @@ export default defineSchema({
   jobActions: defineTable({
     ownerId: v.string(),
     jobId: v.string(),
-    status: v.union(v.literal("Apply"), v.literal("Reject"), v.literal("On Hold")),
+    status: v.union(v.literal("Apply"), v.literal("Reject"), v.literal("On Hold"), v.literal("Resume shortlisted"), v.literal("Interview")),
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])

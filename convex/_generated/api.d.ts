@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as accountRecovery from "../accountRecovery.js";
 import type * as adminAccess from "../adminAccess.js";
 import type * as auth from "../auth.js";
 import type * as connections from "../connections.js";
@@ -18,6 +19,7 @@ import type * as greenhouseRefresh from "../greenhouseRefresh.js";
 import type * as greenhouseSources from "../greenhouseSources.js";
 import type * as http from "../http.js";
 import type * as jobActions from "../jobActions.js";
+import type * as owner from "../owner.js";
 import type * as preferences from "../preferences.js";
 import type * as resumes from "../resumes.js";
 import type * as roleSummaries from "../roleSummaries.js";
@@ -34,6 +36,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountRecovery: typeof accountRecovery;
   adminAccess: typeof adminAccess;
   auth: typeof auth;
   connections: typeof connections;
@@ -44,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   greenhouseSources: typeof greenhouseSources;
   http: typeof http;
   jobActions: typeof jobActions;
+  owner: typeof owner;
   preferences: typeof preferences;
   resumes: typeof resumes;
   roleSummaries: typeof roleSummaries;

@@ -1,11 +1,6 @@
 import { v } from 'convex/values'
 import { mutation, query } from './_generated/server'
-
-async function requireOwner(ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) {
-  const identity = await ctx.auth.getUserIdentity()
-  if (!identity) throw new Error('Please sign in before importing connections.')
-  return identity.subject
-}
+import { requireOwner } from './owner'
 
 const connectionValidator = v.object({
   firstName: v.string(),
@@ -21,7 +16,7 @@ const connectionValidator = v.object({
 export const mine = query({
   args: {},
   handler: async (ctx) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before importing connections.')
     const imports = await ctx.db.query('connectionImports').withIndex('by_owner', (q) => q.eq('ownerId', ownerId)).order('desc').collect()
     const latestImport = imports.find((item) => item.status === 'complete')
     if (!latestImport) return { import: null, connections: [] }
@@ -37,7 +32,7 @@ export const startImport = mutation({
     errors: v.array(v.object({ rowNumber: v.number(), message: v.string() })),
   },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before importing connections.')
     return await ctx.db.insert('connectionImports', { ...args, ownerId, importedRows: 0, status: 'uploading', importedAt: Date.now() })
   },
 })
@@ -45,7 +40,7 @@ export const startImport = mutation({
 export const saveBatch = mutation({
   args: { importId: v.id('connectionImports'), connections: v.array(connectionValidator) },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before importing connections.')
     const importRecord = await ctx.db.get(args.importId)
     if (!importRecord || importRecord.ownerId !== ownerId || importRecord.status !== 'uploading') throw new Error('This connection import is no longer available.')
 
@@ -58,7 +53,7 @@ export const saveBatch = mutation({
 export const finishImport = mutation({
   args: { importId: v.id('connectionImports') },
   handler: async (ctx, args) => {
-    const ownerId = await requireOwner(ctx)
+    const ownerId = await requireOwner(ctx, 'Please sign in before importing connections.')
     const importRecord = await ctx.db.get(args.importId)
     if (!importRecord || importRecord.ownerId !== ownerId || importRecord.status !== 'uploading') throw new Error('This connection import is no longer available.')
     const importedRows = (await ctx.db.query('connections').withIndex('by_import', (q) => q.eq('importId', args.importId)).collect()).length
