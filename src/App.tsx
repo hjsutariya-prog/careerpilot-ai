@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
 import { useConvexAuth } from 'convex/react'
 import './App.css'
+import { ResumeUpload } from './ResumeUpload'
 
 const roleOptions = ['Product Manager', 'Business Analyst', 'Frontend Developer', 'Backend Developer', 'Data Analyst', 'QA Engineer']
 const workPreferences = ['Remote', 'Hybrid', 'On-site']
@@ -237,7 +238,7 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
 }
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | 'preferences'>('landing')
+  const [screen, setScreen] = useState<'landing' | 'preferences' | 'resume'>('landing')
   const [briefReady, setBriefReady] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
   const [authIntent, setAuthIntent] = useState<AuthMode>('signIn')
@@ -248,7 +249,7 @@ function App() {
   const openBrief = () => {
     setBriefReady(true)
     if (isAuthenticated) {
-      setScreen('preferences')
+      setScreen('resume')
       return
     }
     setAuthIntent('signUp')
@@ -256,6 +257,7 @@ function App() {
   }
 
   if (screen === 'preferences') return <PreferencesScreen onBack={() => setScreen('landing')} />
+  if (screen === 'resume') return <ResumeUpload onBack={() => setScreen('landing')} onContinue={() => setScreen('preferences')} />
 
   return (
     <main className="app-shell" id="top">
