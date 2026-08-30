@@ -16,7 +16,7 @@ export const generateUploadUrl = mutation({
 });
 
 export const save = mutation({
-  args: { storageId: v.id("_storage"), fileName: v.string(), mimeType: v.string(), sizeBytes: v.number(), extractedTextLength: v.number() },
+  args: { storageId: v.id("_storage"), fileName: v.string(), mimeType: v.string(), sizeBytes: v.number(), extractedTextLength: v.number(), detectedSkills: v.array(v.string()) },
   handler: async (ctx, args) => {
     const ownerId = await requireOwner(ctx);
     return await ctx.db.insert("resumes", { ...args, ownerId, uploadedAt: Date.now() });

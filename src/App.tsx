@@ -1,14 +1,23 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useAuthActions } from '@convex-dev/auth/react'
-import { useConvexAuth } from 'convex/react'
+import { useConvexAuth, useMutation, useQuery } from 'convex/react'
+import { api } from '../convex/_generated/api'
 import './App.css'
 import { ResumeUpload } from './ResumeUpload'
 
-const roleOptions = ['Product Manager', 'Business Analyst', 'Frontend Developer', 'Backend Developer', 'Data Analyst', 'QA Engineer']
-const workPreferences = ['Remote', 'Hybrid', 'On-site']
+const popularRoleOptions = ['Product Manager', 'Business Analyst', 'Data Analyst', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer']
+const roleOptions = [
+  'Product Manager', 'Product Analyst', 'Business Analyst', 'Data Analyst', 'Data Scientist',
+  'Data Engineer', 'Analytics Engineer', 'Machine Learning Engineer', 'AI / LLM Engineer',
+  'Software Engineer', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer',
+  'Mobile Developer', 'QA Engineer', 'DevOps Engineer', 'Site Reliability Engineer',
+  'Cloud Engineer', 'Cybersecurity Engineer', 'UI / UX Designer',
+]
+const workPreferenceOptions = ['Remote', 'Hybrid', 'On-site']
 const jobTypes = ['Full-time', 'Contract', 'Internship']
+const metroCities = ['Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai', 'Pune', 'Kolkata', 'Ahmedabad']
 
-type PreferenceErrors = Partial<Record<'roles' | 'skills' | 'experience' | 'location' | 'salary' | 'jobType' | 'notice' | 'time', string>>
+type PreferenceErrors = Partial<Record<'roles' | 'skills' | 'experience' | 'location' | 'workPreference' | 'salary' | 'jobType' | 'notice' | 'time' | 'form', string>>
 
 type AuthMode = 'signIn' | 'signUp'
 
@@ -81,26 +90,85 @@ function AuthDialog({ initialMode, onClose }: { initialMode: AuthMode; onClose: 
 }
 
 function PreferencesScreen({ onBack }: { onBack: () => void }) {
+  const savedPreferences = useQuery(api.preferences.mine)
+  const savedResume = useQuery(api.resumes.mine)
+  const savePreferences = useMutation(api.preferences.save)
+  const hasHydrated = useRef(false)
+  const hasSuggestedSkills = useRef(false)
   const [roles, setRoles] = useState<string[]>([])
+  const [roleSearch, setRoleSearch] = useState('')
   const [skills, setSkills] = useState('')
   const [experience, setExperience] = useState('')
-  const [location, setLocation] = useState('')
-  const [workPreference, setWorkPreference] = useState('Hybrid')
+  const [cities, setCities] = useState<string[]>([])
+  const [workPreferences, setWorkPreferences] = useState<string[]>(['Hybrid'])
+  const [otherCity, setOtherCity] = useState('')
+  const [showOtherCity, setShowOtherCity] = useState(false)
   const [salaryMin, setSalaryMin] = useState('')
   const [salaryMax, setSalaryMax] = useState('')
   const [jobType, setJobType] = useState('')
   const [noticePeriod, setNoticePeriod] = useState('')
   const [companiesToAvoid, setCompaniesToAvoid] = useState('')
-  const [dailyTime, setDailyTime] = useState('')
+  const [dailyTime, setDailyTime] = useState('10:00')
   const [errors, setErrors] = useState<PreferenceErrors>({})
   const [isReady, setIsReady] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [skillsSuggested, setSkillsSuggested] = useState(false)
+
+  useEffect(() => {
+    if (savedPreferences === undefined || hasHydrated.current) return
+    if (savedPreferences) {
+      setRoles(savedPreferences.roles)
+      setSkills(savedPreferences.skills)
+      setExperience(String(savedPreferences.experience))
+      setCities(savedPreferences.cities ?? (savedPreferences.city ? [savedPreferences.city] : []))
+      setWorkPreferences(savedPreferences.workPreferences ?? (savedPreferences.workPreference ? [savedPreferences.workPreference] : ['Hybrid']))
+      setSalaryMin(String(savedPreferences.salaryMin))
+      setSalaryMax(String(savedPreferences.salaryMax))
+      setJobType(savedPreferences.jobType)
+      setNoticePeriod(savedPreferences.noticePeriod)
+      setCompaniesToAvoid(savedPreferences.companiesToAvoid)
+      setDailyTime(savedPreferences.dailyTime)
+    }
+    hasHydrated.current = true
+  }, [savedPreferences])
+
+  useEffect(() => {
+    if (savedPreferences === undefined || savedResume === undefined || hasSuggestedSkills.current) return
+    hasSuggestedSkills.current = true
+    if (!savedPreferences?.skills && !skills && savedResume?.detectedSkills?.length) {
+      setSkills(savedResume.detectedSkills.join(', '))
+      setSkillsSuggested(true)
+    }
+  }, [savedPreferences, savedResume, skills])
 
   const toggleRole = (role: string) => {
     setRoles((currentRoles) => currentRoles.includes(role) ? currentRoles.filter((currentRole) => currentRole !== role) : [...currentRoles, role])
     setIsReady(false)
   }
 
-  const submitPreferences = (event: FormEvent<HTMLFormElement>) => {
+  const toggleCity = (city: string) => {
+    setCities((currentCities) => currentCities.includes(city) ? currentCities.filter((currentCity) => currentCity !== city) : [...currentCities, city])
+    setIsReady(false)
+  }
+
+  const addOtherCity = () => {
+    const city = otherCity.trim()
+    if (!city) return
+    setCities((currentCities) => currentCities.includes(city) ? currentCities : [...currentCities, city])
+    setOtherCity('')
+    setShowOtherCity(false)
+    setIsReady(false)
+  }
+
+  const toggleWorkPreference = (preference: string) => {
+    setWorkPreferences((currentPreferences) => currentPreferences.includes(preference) ? currentPreferences.filter((currentPreference) => currentPreference !== preference) : [...currentPreferences, preference])
+    setIsReady(false)
+  }
+
+  const matchingRoles = roleOptions.filter((role) => role.toLowerCase().includes(roleSearch.trim().toLowerCase()))
+  const additionalSelectedRoles = roles.filter((role) => !popularRoleOptions.includes(role))
+
+  const submitPreferences = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const nextErrors: PreferenceErrors = {}
     const validTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(dailyTime)
@@ -110,14 +178,41 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
     if (roles.length === 0) nextErrors.roles = 'Choose at least one target role.'
     if (!skills.trim()) nextErrors.skills = 'Add the skills you want us to match.'
     if (!experience || Number(experience) < 0) nextErrors.experience = 'Enter your years of experience.'
-    if (!location.trim() && workPreference !== 'Remote') nextErrors.location = 'Add a city for Hybrid or On-site roles.'
+    if (cities.length === 0 && workPreferences.some((preference) => preference !== 'Remote')) nextErrors.location = 'Choose at least one city for Hybrid or On-site roles.'
     if (!salaryMin || !salaryMax || minimumSalary < 0 || maximumSalary < 0 || minimumSalary > maximumSalary) nextErrors.salary = 'Enter a valid range where the minimum is not higher than the maximum.'
+    if (workPreferences.length === 0) nextErrors.workPreference = 'Choose at least one work preference.'
     if (!jobType) nextErrors.jobType = 'Choose a job type.'
     if (!noticePeriod) nextErrors.notice = 'Choose your notice period.'
     if (!validTime) nextErrors.time = 'Choose a valid daily search time in India time.'
 
     setErrors(nextErrors)
-    setIsReady(Object.keys(nextErrors).length === 0)
+    if (Object.keys(nextErrors).length > 0) {
+      setIsReady(false)
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      await savePreferences({
+        roles,
+        skills: skills.trim(),
+        experience: Number(experience),
+        cities,
+        workPreferences,
+        salaryMin: minimumSalary,
+        salaryMax: maximumSalary,
+        jobType,
+        noticePeriod,
+        companiesToAvoid: companiesToAvoid.trim(),
+        dailyTime,
+      })
+      setIsReady(true)
+    } catch {
+      setErrors({ form: 'We could not save your preferences. Please try again.' })
+      setIsReady(false)
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -125,14 +220,12 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
       <header className="preference-topbar">
         <button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button>
         <a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a>
-        <span className="preference-stage">Your job brief</span>
       </header>
 
       <div className="preferences-layout">
         <aside className="preferences-intro">
-          <p className="eyebrow">YOUR NEXT MOVE</p>
-          <h1>Tell us what better looks like.</h1>
-          <p>These details shape the roles you receive. You can change them before a later search.</p>
+          <h1>Set your job preferences.</h1>
+          <p>Tell us what you want next. We’ll use it to shape your daily job brief.</p>
           <ol className="brief-path">
             <li><span>1</span><div><strong>Choose your direction</strong><small>Roles, skills and experience</small></div></li>
             <li><span>2</span><div><strong>Set your boundaries</strong><small>Location, salary and job type</small></div></li>
@@ -142,45 +235,66 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
 
         <section className="preferences-panel" aria-labelledby="preferences-heading">
           <div className="panel-heading">
-            <p className="eyebrow">Preferences</p>
-            <h2 id="preferences-heading">Build your job brief</h2>
+            <h2 id="preferences-heading">What are you looking for?</h2>
             <p>Fields marked with <b>*</b> are needed before we can search.</p>
           </div>
 
-          <form noValidate onSubmit={submitPreferences}>
+          <form noValidate onSubmit={(event) => void submitPreferences(event)}>
             <fieldset className="preference-fieldset">
               <legend>Target roles <b>*</b></legend>
               <div className="role-pills">
-                {roleOptions.map((role) => <button aria-pressed={roles.includes(role)} className={roles.includes(role) ? 'role-pill selected' : 'role-pill'} key={role} onClick={() => toggleRole(role)} type="button">{role}</button>)}
+                {popularRoleOptions.map((role) => <button aria-pressed={roles.includes(role)} className={roles.includes(role) ? 'role-pill selected' : 'role-pill'} key={role} onClick={() => toggleRole(role)} type="button">{role}</button>)}
+                {additionalSelectedRoles.map((role) => <button aria-pressed="true" className="role-pill selected" key={role} onClick={() => toggleRole(role)} type="button">{role}</button>)}
               </div>
+              <details className="role-browser">
+                <summary>Browse all roles <span aria-hidden="true">↓</span></summary>
+                <div className="role-browser-panel">
+                  <input aria-label="Search job roles" onChange={(event) => setRoleSearch(event.target.value)} placeholder="Search roles, e.g. cloud or data" type="search" value={roleSearch} />
+                  <div className="role-browser-list">
+                    {matchingRoles.map((role) => <button aria-pressed={roles.includes(role)} className={roles.includes(role) ? 'role-pill selected' : 'role-pill'} key={role} onClick={() => toggleRole(role)} type="button">{role}</button>)}
+                  </div>
+                  {matchingRoles.length === 0 && <p className="role-empty">No role found. Try a broader search.</p>}
+                </div>
+              </details>
               {errors.roles && <p className="field-error" role="alert">{errors.roles}</p>}
             </fieldset>
 
             <label className="form-field">
               <span>Skills <b>*</b></span>
               <input aria-invalid={Boolean(errors.skills)} onChange={(event) => { setSkills(event.target.value); setIsReady(false) }} placeholder="e.g. SQL, user research, React" type="text" value={skills} />
-              <small>Separate skills with commas.</small>
+              <small>{skillsSuggested ? 'Suggested from your resume. Edit anything you want.' : 'Separate skills with commas.'}</small>
               {errors.skills && <p className="field-error" role="alert">{errors.skills}</p>}
             </label>
 
-            <div className="form-two-up">
-              <label className="form-field">
+            <div className="work-details-grid">
+              <label className="form-field experience-field">
                 <span>Years of experience <b>*</b></span>
                 <input aria-invalid={Boolean(errors.experience)} inputMode="decimal" min="0" onChange={(event) => { setExperience(event.target.value); setIsReady(false) }} placeholder="e.g. 4" type="number" value={experience} />
                 {errors.experience && <p className="field-error" role="alert">{errors.experience}</p>}
               </label>
-              <label className="form-field">
-                <span>City</span>
-                <input aria-invalid={Boolean(errors.location)} onChange={(event) => { setLocation(event.target.value); setIsReady(false) }} placeholder="e.g. Bengaluru" type="text" value={location} />
-                {errors.location && <p className="field-error" role="alert">{errors.location}</p>}
-              </label>
+              <fieldset className="preference-fieldset work-preference-fieldset">
+                <legend>Work preference <b>*</b></legend>
+                <div className="segmented-options">
+                  {workPreferenceOptions.map((preference) => <button aria-pressed={workPreferences.includes(preference)} className={workPreferences.includes(preference) ? 'segment selected' : 'segment'} key={preference} onClick={() => toggleWorkPreference(preference)} type="button">{preference}</button>)}
+                </div>
+                <small>Choose every work style you would consider.</small>
+                {errors.workPreference && <p className="field-error" role="alert">{errors.workPreference}</p>}
+              </fieldset>
             </div>
 
-            <fieldset className="preference-fieldset">
-              <legend>Work preference <b>*</b></legend>
-              <div className="segmented-options">
-                {workPreferences.map((preference) => <button aria-pressed={workPreference === preference} className={workPreference === preference ? 'segment selected' : 'segment'} key={preference} onClick={() => { setWorkPreference(preference); setIsReady(false) }} type="button">{preference}</button>)}
-              </div>
+            <fieldset className="preference-fieldset city-selector">
+              <legend>Preferred cities {workPreferences.some((preference) => preference !== 'Remote') && <b>*</b>}</legend>
+              <p>Choose one or more cities. This is optional when you select only Remote.</p>
+              {cities.length > 0 && <div className="city-pills">{cities.map((city) => <button aria-label={`Remove ${city}`} className="city-pill" key={city} onClick={() => toggleCity(city)} type="button">{city} <span aria-hidden="true">×</span></button>)}</div>}
+              <details className="city-browser">
+                <summary>{cities.length > 0 ? 'Add another city' : 'Choose metro cities'} <span aria-hidden="true">↓</span></summary>
+                <div className="city-browser-panel">
+                  {metroCities.map((city) => <button aria-pressed={cities.includes(city)} className={cities.includes(city) ? 'segment selected' : 'segment'} key={city} onClick={() => toggleCity(city)} type="button">{city}</button>)}
+                  <button aria-expanded={showOtherCity} className="segment city-other" onClick={() => setShowOtherCity((current) => !current)} type="button">Other city</button>
+                  {showOtherCity && <div className="other-city-entry"><input aria-label="Other city" onChange={(event) => setOtherCity(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addOtherCity() } }} placeholder="Enter city name" type="text" value={otherCity} /><button onClick={addOtherCity} type="button">Add</button></div>}
+                </div>
+              </details>
+              {errors.location && <p className="field-error" role="alert">{errors.location}</p>}
             </fieldset>
 
             <fieldset className="preference-fieldset salary-fieldset">
@@ -228,8 +342,9 @@ function PreferencesScreen({ onBack }: { onBack: () => void }) {
               {errors.time && <p className="field-error" role="alert">{errors.time}</p>}
             </fieldset>
 
-            <button className="save-preferences" type="submit">Check my preferences <span aria-hidden="true">→</span></button>
-            {isReady && <p className="form-success" role="status"><span aria-hidden="true">●</span> Preferences are ready. Sign in is the next step so your resume stays private.</p>}
+            <button className="save-preferences" disabled={isSaving} type="submit">{isSaving ? 'Saving preferences…' : 'Save job preferences'} <span aria-hidden="true">→</span></button>
+            {errors.form && <p className="field-error" role="alert">{errors.form}</p>}
+            {isReady && <p className="form-success" role="status"><span aria-hidden="true">●</span> Preferences saved. Your next brief will use these details.</p>}
           </form>
         </section>
       </div>
