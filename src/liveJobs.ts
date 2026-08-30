@@ -24,6 +24,16 @@ function formatDate(timestamp: number) {
   return dateFormatter.format(new Date(timestamp))
 }
 
+export function summarizeRoleDescription(description: string, maximumLength = 280) {
+  const compact = description.replace(/\s+/g, ' ').trim()
+  if (compact.length <= maximumLength) return compact
+
+  const preview = compact.slice(0, maximumLength)
+  const lastSentence = Math.max(preview.lastIndexOf('. '), preview.lastIndexOf('; '), preview.lastIndexOf(': '))
+  const endAt = lastSentence >= Math.floor(maximumLength * 0.65) ? lastSentence + 1 : maximumLength
+  return `${compact.slice(0, endAt).trim()}…`
+}
+
 export function toLiveJobCard(suggestion: LiveSuggestionRecord) {
   if (!suggestion.job) return null
   const { job } = suggestion

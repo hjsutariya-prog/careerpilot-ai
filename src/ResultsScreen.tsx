@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import { findCompanyConnections } from './connectionMatching'
-import { toLiveJobCard } from './liveJobs'
+import { summarizeRoleDescription, toLiveJobCard } from './liveJobs'
 import { getUndecidedJobs } from './trackerJobs'
 
 type JobActionStatus = 'Apply' | 'Reject' | 'On Hold'
@@ -112,7 +112,7 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
                       <div className="job-tile-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span></div>
                       <p className="job-tile-reason"><b>Why it fits</b> {job.matchReason}</p>
                       {matchingConnections.length > 0 && <section className="job-tile-connections"><p><b>Connections at {job.companyName}</b></p><div>{matchingConnections.slice(0, 2).map((connection) => connection.profileUrl ? <a href={connection.profileUrl} key={connection.profileUrl + connection.firstName + connection.lastName} rel="noreferrer" target="_blank"><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')} <i aria-hidden="true">↗</i></a> : <span className="workspace-connection-name" key={connection.firstName + connection.lastName + connection.company}><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')}</span>)}</div>{matchingConnections.length > 2 && <small>+{matchingConnections.length - 2} more in details</small>}</section>}
-                      <details className="job-tile-details"><summary>Role details <span aria-hidden="true">↓</span></summary><p>{job.description}</p><div>{job.skills.slice(0, 6).map((skill) => <span key={skill}>{skill}</span>)}</div></details>
+                      <details className="job-tile-details"><summary><span><b>Quick read</b><small>Role overview and key skills</small></span><i aria-hidden="true">↓</i></summary><div className="role-detail-panel"><section><p className="role-detail-label">About this role</p><p className="role-detail-summary">{summarizeRoleDescription(job.description)}</p></section>{job.skills.length > 0 && <section><p className="role-detail-label">Skills named in the listing</p><div className="role-skill-list">{job.skills.slice(0, 6).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<a href={job.applyUrl} rel="noreferrer" target="_blank">Read the full description on {job.companyName} <span aria-hidden="true">↗</span></a></div></details>
                       <footer className="job-tile-footer"><div><p>{job.freshnessLabel}</p><small>{job.checkedLabel}</small></div><div className="job-tile-actions"><a aria-disabled={isSaving} className="workspace-apply" href={job.applyUrl} onClick={() => void saveStatus(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply <span aria-hidden="true">↗</span></a><button disabled={isSaving} onClick={() => void saveStatus(job.id, 'On Hold')} type="button">Hold</button><button className="reject" disabled={isSaving} onClick={() => void saveStatus(job.id, 'Reject')} type="button">Reject</button></div></footer>
                     </article>
                   })}

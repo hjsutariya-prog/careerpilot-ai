@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toLiveJobCard } from './liveJobs'
+import { summarizeRoleDescription, toLiveJobCard } from './liveJobs'
 
 describe('toLiveJobCard', () => {
   it('uses Last updated rather than a made-up posting date', () => {
@@ -20,5 +20,17 @@ describe('toLiveJobCard', () => {
         lastSeenAt: Date.parse('2026-08-30T12:00:00Z'),
       },
     })).toMatchObject({ freshnessLabel: 'Last updated 29 Aug', checkedLabel: 'Checked 30 Aug' })
+  })
+})
+
+describe('summarizeRoleDescription', () => {
+  it('keeps a readable short preview instead of rendering a full job description', () => {
+    const description = 'Build reliable payment systems for millions of customers. Work with product, data and platform teams to ship improvements. This final sentence should not appear in the quick read.'
+
+    const preview = summarizeRoleDescription(description, 110)
+
+    expect(preview.startsWith('Build reliable payment systems for millions of customers.')).toBe(true)
+    expect(preview).toHaveLength(111)
+    expect(preview.endsWith('…')).toBe(true)
   })
 })
