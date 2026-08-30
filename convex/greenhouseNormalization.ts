@@ -27,6 +27,7 @@ export type NormalizedGreenhouseJob = {
 
 const indiaPattern = /\bindia\b|\bbengaluru\b|\bbangalore\b|\bhyderabad\b|\bpune\b|\bmumbai\b|\bchennai\b|\bkolkata\b|\bahmedabad\b|\bdelhi\b|\bgurugram\b|\bgurgaon\b|\bnoida\b/i;
 const itRolePattern = /\b(engineer|engineering|developer|software|data|product|analyst|designer|design|devops|cloud|security|qa|sdet|technical|machine learning|artificial intelligence|ai)\b/i;
+const excludedRolePattern = /\b(recruiter|recruiting|talent|human resources|hr|sales|marketing|finance|legal|procurement|account executive|customer success)\b/i;
 const skillCandidates = ["TypeScript", "JavaScript", "React", "Node.js", "Python", "Java", "Go", "SQL", "AWS", "Azure", "GCP", "Kubernetes", "Docker", "Terraform", "Machine Learning", "Data Engineering", "Product Management", "Figma", "Tableau"];
 
 function normalise(value: string) {
@@ -34,7 +35,17 @@ function normalise(value: string) {
 }
 
 function stripHtml(value: string) {
-  return value.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
+  let decoded = value;
+  for (let pass = 0; pass < 2; pass += 1) {
+    decoded = decoded
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&amp;/gi, "&");
+  }
+  return decoded.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function citiesFromLocation(location: string) {
@@ -62,7 +73,7 @@ export function normalizeGreenhouseJob(source: GreenhouseSource, job: Greenhouse
   const lastUpdatedAt = Date.parse(job.updated_at);
 
   if (!job.title.trim() || !locationLabel || !indiaPattern.test(locationLabel)) return null;
-  if (!itRolePattern.test(`${job.title} ${description}`)) return null;
+  if (!itRolePattern.test(job.title) || excludedRolePattern.test(job.title)) return null;
   if (!job.absolute_url.startsWith("https://") || !Number.isFinite(lastUpdatedAt)) return null;
 
   return {

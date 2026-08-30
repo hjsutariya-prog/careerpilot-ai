@@ -26,4 +26,23 @@ describe("normalizeGreenhouseJob", () => {
     expect(normalizeGreenhouseJob(source, { ...greenhouseJob, location: { name: "New York, United States" } }, 1)).toBeNull();
     expect(normalizeGreenhouseJob(source, { ...greenhouseJob, absolute_url: "http://example.test/job" }, 1)).toBeNull();
   });
+
+  it("rejects a non-tech title even when its description mentions technology", () => {
+    expect(normalizeGreenhouseJob(source, {
+      ...greenhouseJob,
+      title: "Revenue Manager",
+      content: "<p>Sell cloud data products to technical teams.</p>",
+    }, 1)).toBeNull();
+  });
+
+  it("rejects recruiting titles and turns encoded job content into readable text", () => {
+    expect(normalizeGreenhouseJob(source, {
+      ...greenhouseJob,
+      title: "Director of Recruiting, Engineering & IT",
+    }, 1)).toBeNull();
+    expect(normalizeGreenhouseJob(source, {
+      ...greenhouseJob,
+      content: "&lt;p&gt;Build &amp; operate secure APIs.&lt;/p&gt;",
+    }, 1)?.description).toBe("Build & operate secure APIs.");
+  });
 });
