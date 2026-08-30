@@ -1,4 +1,10 @@
-# React + TypeScript + Vite
+# CareerPilot.AI
+
+Official public link: [https://careerpilot-jobs.vercel.app](https://careerpilot-jobs.vercel.app)
+
+When deploying a new production build, keep this Vercel alias attached to the latest deployment.
+
+## Project setup
 
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
