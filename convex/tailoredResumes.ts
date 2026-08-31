@@ -77,16 +77,18 @@ function replacementsForResponse(response: ParsedTailoringResponse, slots: Templ
 }
 
 export function templateReplacementDiagnostics(text: string, slots: TemplateSlot[]) {
+  const canonicalResponse = parseTailoringResponse(text)
+  if (canonicalResponse) return { shape: 'edits', ...validateTailoringResponse({ response: canonicalResponse, editableSlots: slots, enforceUnderstatedEditLinks: canonicalResponse.analysisProvided }).diagnostics }
+  const legacyIndexedResponse = parseLegacyIndexedTailoringResponse(text)
+  if (legacyIndexedResponse) {
+    const response = legacyResponse(legacyIndexedResponse.edits.map((edit) => ({ blockId: slots[edit.index]?.blockId ?? `legacy_index_${edit.index}`, text: edit.text })))
+    return { shape: 'edits', ...validateTailoringResponse({ response, editableSlots: slots }).diagnostics }
+  }
   try {
     const fenced = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
     const candidate = JSON.parse(fenced.match(/\{[\s\S]*\}/)?.[0] ?? fenced)
     if (!Array.isArray(candidate?.edits)) return { shape: Array.isArray(candidate) || Array.isArray(candidate?.replacements) ? 'replacement-array' : 'unexpected', proposed: 0, editable: 0, safe: 0 }
-    const response = parseTailoringResponse(text) ?? (() => {
-      const legacy = parseLegacyIndexedTailoringResponse(text)
-      return legacy ? legacyResponse(legacy.edits.map((edit) => ({ blockId: slots[edit.index]?.blockId ?? `legacy_index_${edit.index}`, text: edit.text }))) : null
-    })()
-    if (!response) return { shape: 'invalid-edits', proposed: 0, editable: 0, safe: 0 }
-    return { shape: 'edits', ...validateTailoringResponse({ response, editableSlots: slots, enforceUnderstatedEditLinks: response.analysisProvided }).diagnostics }
+    return { shape: 'invalid-edits', proposed: 0, editable: 0, safe: 0 }
   } catch (error) {
     return { shape: 'invalid-json', textLength: text.length, parserError: error instanceof Error ? error.message : 'unknown', proposed: 0, editable: 0, safe: 0 }
   }

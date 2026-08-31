@@ -26,6 +26,14 @@ describe('tailoring response schema', () => {
     expect(parseTailoringResponse('{"edits":')).toBeNull()
   })
 
+  it('repairs a missing comma before validating the response shape', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[],"understated":[],"missing":[]} "edits":[]}')).toEqual({
+      analysis: { matched: [], understated: [], missing: [] },
+      edits: [],
+      analysisProvided: true,
+    })
+  })
+
   it('rejects a response without its required edits field', () => {
     expect(parseTailoringResponse('{"replacements":[]}')).toBeNull()
   })

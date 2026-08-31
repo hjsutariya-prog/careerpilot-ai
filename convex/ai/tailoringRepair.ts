@@ -4,12 +4,12 @@ function jsonText(raw: string) {
 }
 
 export function requiresTailoringJsonRepair(raw: string) {
-  try {
-    JSON.parse(jsonText(raw))
-    return false
-  } catch {
-    return true
-  }
+  // The schema parser first attempts a local punctuation-only JSON repair.
+  // Only spend a second model call if none of the supported formats survive it.
+  const candidate = jsonText(raw)
+  return !parseTailoringResponse(candidate)
+    && !parseLegacyIndexedTailoringResponse(candidate)
+    && !parseLegacyTailoringReplacements(candidate)
 }
 
 export function buildTailoringJsonRepairPrompt(originalPrompt: string) {
@@ -24,3 +24,4 @@ Rules:
 TASK:
 ${originalPrompt}`
 }
+import { parseLegacyIndexedTailoringResponse, parseLegacyTailoringReplacements, parseTailoringResponse } from './tailoringSchema'

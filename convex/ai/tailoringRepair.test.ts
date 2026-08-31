@@ -8,6 +8,10 @@ describe('tailoring JSON repair', () => {
     expect(requiresTailoringJsonRepair('```json\n{"edits":[]}\n```')).toBe(false)
   })
 
+  it('uses local punctuation repair before asking Gemini again', () => {
+    expect(requiresTailoringJsonRepair('{"analysis":{"matched":[],"understated":[],"missing":[]} "edits":[]}')).toBe(false)
+  })
+
   it('reuses the original task so the low-cost retry can produce safe edits', () => {
     const originalPrompt = 'JOB DESCRIPTION:\nBuild React tools\n\nSOURCE RESUME:\nBuilt React dashboards'
     const prompt = buildTailoringJsonRepairPrompt(originalPrompt)

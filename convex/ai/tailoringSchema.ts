@@ -99,11 +99,16 @@ export const tailoringResponseSchema = {
 } as const
 
 function jsonCandidate(raw: string): unknown | null {
+  const fenced = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  const candidate = fenced.match(/\{[\s\S]*\}/)?.[0] ?? fenced
   try {
-    const fenced = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
-    return JSON.parse(fenced.match(/\{[\s\S]*\}/)?.[0] ?? fenced)
+    return JSON.parse(candidate)
   } catch {
-    return null
+    try {
+      return JSON.parse(jsonrepair(candidate))
+    } catch {
+      return null
+    }
   }
 }
 
@@ -170,3 +175,4 @@ export function parseLegacyTailoringReplacements(raw: string): unknown[] | null 
   const values = Array.isArray(candidate) ? candidate : isRecord(candidate) ? candidate.replacements : null
   return Array.isArray(values) ? values : null
 }
+import { jsonrepair } from 'jsonrepair'
