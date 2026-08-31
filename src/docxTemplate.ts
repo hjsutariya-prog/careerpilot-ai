@@ -65,7 +65,10 @@ function withExperienceMetadata(slots: DocxSlot[]): ResumeBlockSource[] {
       return { text: slot.text, editable: false, kind: 'experience_header', experienceId: currentExperienceId }
     }
 
-    if (isInExperienceSection && currentExperienceId && isBulletSlot(slot)) {
+    // A protected paragraph must never be represented as an editable experience
+    // bullet. Keep it ungrouped instead, so an unusual DOCX cannot make the
+    // complete tailoring request fail its block-integrity check.
+    if (isInExperienceSection && currentExperienceId && slot.editable && isBulletSlot(slot)) {
       const bulletIndex = nextBulletIndex.get(currentExperienceId) ?? 0
       nextBulletIndex.set(currentExperienceId, bulletIndex + 1)
       return { text: slot.text, editable: slot.editable, kind: 'experience_bullet', experienceId: currentExperienceId, bulletIndex }

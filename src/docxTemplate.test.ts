@@ -76,6 +76,19 @@ describe('DOCX template patching', () => {
     expect(createResumeBlocksFromDocxSlots(slots)[2]).toMatchObject({ kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 })
   })
 
+  it('keeps protected bullet-like paragraphs ungrouped so they cannot invalidate tailoring blocks', () => {
+    const blocks = createResumeBlocksFromDocxSlots([
+      { index: 0, text: 'EXPERIENCE', editable: false },
+      { index: 1, text: 'Product Owner | Company A | 2022–Present', editable: true },
+      { index: 2, text: '• OWNED RELEASE MANAGEMENT', editable: false },
+      { index: 3, text: '• Facilitated sprint planning', editable: true },
+    ])
+
+    expect(blocks[2]).toMatchObject({ kind: 'other', editable: false })
+    expect(blocks[2]?.experienceId).toBeUndefined()
+    expect(blocks[3]).toMatchObject({ kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 })
+  })
+
   it('moves complete existing bullet paragraphs without changing their formatting or text', () => {
     const bulletXml = '<w:document><w:body><w:p><w:r><w:t>EXPERIENCE</w:t></w:r></w:p><w:p><w:r><w:t>Product Owner | Company A | 2022–Present</w:t></w:r></w:p><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Coordinated stakeholders</w:t></w:r></w:p><w:p><w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>Managed releases</w:t></w:r></w:p></w:body></w:document>'
     const slots = extractSlotsFromDocumentXml(bulletXml)
