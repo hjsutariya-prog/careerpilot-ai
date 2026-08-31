@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateTailoringResponse } from './tailoringValidation'
+import { isSafeExperienceRewrite, validateTailoringResponse } from './tailoringValidation'
 import { createResumeBlocks } from './resumeBlocks'
 import { emptyTailoringAnalysis } from './tailoringSchema'
 
@@ -55,6 +55,40 @@ describe('tailoring semantic validation', () => {
 
     expect(result.acceptedEdits).toEqual([])
     expect(result.rejectedEdits[0]?.reason).toBe('replacement_too_long')
+  })
+
+  it('rejects the destructive Product Owner shortening from production', () => {
+    const source = 'Product Owner for the NFRM Event & Reporting domain: own backlog prioritization, sprint planning, and release management across two enterprise platforms, driving execution through a Paris–Bangalore team of 5 developers and 3 Business Analysts and partnering with Risk, Compliance, Operations, and Technology stakeholders across all Three Lines of Defence.'
+    const replacement = 'Product Owner for the NFRM Event & Reporting domain: own features from concept to delivery across two enterprise platforms, driving execution through a Paris-Bangalore team of 5 developers and 3 Business Analysts and partnering with stakeholders.'
+    const result = validateTailoringResponse({
+      response: { analysis: { matched: [], understated: [{ requirement: 'Product delivery', evidenceBlockIds: ['paragraph_0'] }], missing: [] }, edits: [{ blockId: 'paragraph_0', text: replacement }] },
+      editableSlots: createResumeBlocks([{ text: source, editable: true }]),
+      enforceUnderstatedEditLinks: true,
+    })
+    expect(result.rejectedEdits[0]?.reason).toBe('material_content_removed')
+  })
+
+  it('accepts same-length and up-to-110% safe experience rewording', () => {
+    expect(isSafeExperienceRewrite('Led sprint planning.', 'Ran sprint planning.')).toBe(true)
+    expect(isSafeExperienceRewrite('Built React dashboards.', 'Created React dashboards.')).toBe(true)
+  })
+
+  it('rejects replacements over the character or word length limit', () => {
+    const overCharacters = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built React dashboards for many internal business teams.' }]), editableSlots })
+    expect(overCharacters.rejectedEdits[0]?.reason).toBe('replacement_too_long')
+    const source = 'Built comprehensive internationalization architecture supporting global enterprise applications.'
+    const overWords = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built comprehensive internationalization architecture supporting global enterprise applications now go.' }]), editableSlots: createResumeBlocks([{ text: source, editable: true }]) })
+    expect(overWords.rejectedEdits[0]?.reason).toBe('replacement_too_long')
+  })
+
+  it('accepts controlled responsibility equivalence and rejects removed material concepts', () => {
+    expect(isSafeExperienceRewrite('Owned backlog prioritization across two platforms.', 'Prioritized backlog across two platforms.')).toBe(true)
+    const sprint = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Owned backlog prioritization and release management across two platforms.' }]), editableSlots: createResumeBlocks([{ text: 'Owned backlog prioritization, sprint planning, and release management across two platforms.', editable: true }]) })
+    expect(sprint.rejectedEdits[0]?.reason).toBe('material_content_removed')
+    const stakeholders = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Led delivery with stakeholders.' }]), editableSlots: createResumeBlocks([{ text: 'Led delivery with Risk, Compliance, Operations, and Technology stakeholders.', editable: true }]) })
+    expect(stakeholders.rejectedEdits[0]?.reason).toBe('material_content_removed')
+    const organization = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Partnered across all lines.' }]), editableSlots: createResumeBlocks([{ text: 'Partnered across all Three Lines of Defence.', editable: true }]) })
+    expect(organization.rejectedEdits[0]?.reason).toBe('material_content_removed')
   })
 
   it('rejects an action-verb tense change', () => {

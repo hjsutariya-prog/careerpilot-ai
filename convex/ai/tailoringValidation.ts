@@ -108,17 +108,99 @@ export function isSafeSkillReorder(source: string, replacement: string) {
   return sourceItems.items.toSorted().join('\u0000') === replacementItems.items.toSorted().join('\u0000') && sourceItems.items.join('\u0000') !== replacementItems.items.join('\u0000')
 }
 
+const genericMaterialWords = new Set(['a', 'an', 'and', 'applications', 'as', 'for', 'in', 'of', 'on', 'or', 'responsible', 'stakeholders', 'systems', 'team', 'the', 'to', 'with', 'worked', 'work'])
+const leadingActionWords = new Set(['built', 'created', 'delivered', 'developed', 'directed', 'drove', 'led', 'made', 'managed', 'owned', 'partnered', 'ran', 'supported', 'wrote'])
+const responsibilityEquivalences = [
+  ['backlog prioritization', 'prioritized backlog'],
+  ['sprint planning', 'planned sprints'],
+  ['release management', 'managed releases'],
+] as const
+
+function wordCount(text: string) {
+  return text.match(/[A-Za-z0-9]+(?:[+#.-][A-Za-z0-9]+)*/g)?.length ?? 0
+}
+
+function normalizedMaterialPhrase(text: string) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function includesMaterialPhrase(text: string, phrase: string) {
+  return ` ${normalizedMaterialPhrase(text)} `.includes(` ${phrase} `)
+}
+
+function equivalentMaterialPhrases(phrase: string) {
+  const pair = responsibilityEquivalences.find(([first, second]) => first === phrase || second === phrase)
+  return pair ? [...pair] : [phrase]
+}
+
+function isControlledResponsibilityPhrase(phrase: string) {
+  return responsibilityEquivalences.some(([first, second]) => first === phrase || second === phrase)
+}
+
+function addMaterialConcept(concepts: Set<string>, value: string) {
+  const normalized = normalizedMaterialPhrase(value)
+  const words = normalized.split(' ').filter(Boolean)
+  if (!normalized || (words.length === 1 && genericMaterialWords.has(words[0]))) return
+  concepts.add(normalized)
+}
+
+function responsibilityItemsIn(text: string) {
+  const items: string[] = []
+  const pattern = /\b(?:own|owned|manage|managed|lead|led|direct|directed|drive|drove|deliver|delivered|prioritize|prioritized)\s+([^.;:]+?)(?=\s+(?:across|through|with|for|in|to)\b|[.;]|$)/gi
+  for (const match of text.matchAll(pattern)) {
+    const isList = /,|\band\b/i.test(match[1])
+    for (const item of match[1].replace(/\s+and\s+/gi, ',').split(',')) {
+      const normalized = normalizedMaterialPhrase(item)
+      const words = normalized.split(' ').filter(Boolean)
+      const isControlledPhrase = isControlledResponsibilityPhrase(normalized)
+      if ((isList || isControlledPhrase) && (words.length > 1 || (words.length === 1 && !genericMaterialWords.has(words[0])))) items.push(normalized)
+    }
+  }
+  return items
+}
+
+function materialConceptsIn(text: string) {
+  const concepts = new Set<string>()
+  for (const item of responsibilityItemsIn(text)) addMaterialConcept(concepts, item)
+  const capitalizedPhrase = /\b(?:[A-Z][A-Za-z0-9]*)(?:(?:\s+|\s*[&–-]\s*)[A-Z][A-Za-z0-9]*)*/g
+  for (const match of text.matchAll(capitalizedPhrase)) {
+    const words = match[0].split(/\s+/)
+    if (leadingActionWords.has(words[0].toLowerCase())) words.shift()
+    addMaterialConcept(concepts, words.join(' '))
+  }
+  const organizationalConcept = /\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*\s+of\s+[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)*)\b/g
+  for (const match of text.matchAll(organizationalConcept)) addMaterialConcept(concepts, match[1])
+  const scopePatterns = [
+    /\b(?:across|through|within|in)\s+((?:one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:[a-z]+\s+){0,3}(?:platforms?|teams?|products?|regions?|markets?|countries?))\b/gi,
+    /\b((?:[A-Z][A-Za-z]*(?:[-–][A-Z][A-Za-z]*)+)\s+team)\b/g,
+    /\b(\d+\s+(?:(?:[A-Za-z]+\s+){0,2})(?:developers?|analysts?|engineers?|designers?|managers?|specialists?|users?|customers?))\b/gi,
+  ]
+  for (const pattern of scopePatterns) for (const match of text.matchAll(pattern)) addMaterialConcept(concepts, match[1])
+  return [...concepts]
+}
+
+function removedMaterialConcepts(source: string, replacement: string) {
+  return materialConceptsIn(source).filter((concept) => !equivalentMaterialPhrases(concept).some((variant) => includesMaterialPhrase(replacement, variant)))
+}
+
+function isWithinExperienceLengthLimit(source: string, replacement: string) {
+  return replacement.length <= Math.ceil(source.length * 1.1)
+    && wordCount(replacement) <= Math.ceil(wordCount(source) * 1.1)
+}
+
 export function isSafeExperienceRewrite(source: string, replacement: string) {
   const sourceValues = valuesIn(source)
   const replacementValues = valuesIn(replacement)
   const sourceAcronyms = acronymsIn(source)
   const replacementAcronyms = acronymsIn(replacement)
   return preservesActionTense(source, replacement)
+    && isWithinExperienceLengthLimit(source, replacement)
     && sourceValues.length === replacementValues.length
     && sourceValues.every((value, index) => value === replacementValues[index])
     && sourceAcronyms.every((acronym) => replacementAcronyms.includes(acronym))
     && replacementAcronyms.every((acronym) => sourceAcronyms.includes(acronym))
     && replacement.split(/[.!?]/).filter(Boolean).length <= source.split(/[.!?]/).filter(Boolean).length
+    && removedMaterialConcepts(source, replacement).length === 0
 }
 
 function rejectionReason(source: string, replacement: string) {
@@ -126,20 +208,21 @@ function rejectionReason(source: string, replacement: string) {
     if (replacement.length > source.length) return 'replacement_too_long'
     return 'unsafe_skill_reorder'
   }
-  if (replacement.length >= source.length) return 'replacement_too_long'
+  if (!isWithinExperienceLengthLimit(source, replacement)) return 'replacement_too_long'
   if (!preservesActionTense(source, replacement)) return 'changed_action_tense'
   if (valuesIn(source).join('\u0000') !== valuesIn(replacement).join('\u0000')) return 'changed_number'
   const sourceAcronyms = acronymsIn(source)
   const replacementAcronyms = acronymsIn(replacement)
   if (!sourceAcronyms.every((acronym) => replacementAcronyms.includes(acronym)) || !replacementAcronyms.every((acronym) => sourceAcronyms.includes(acronym))) return 'changed_acronym'
   if (replacement.split(/[.!?]/).filter(Boolean).length > source.split(/[.!?]/).filter(Boolean).length) return 'expanded_sentence_count'
+  if (removedMaterialConcepts(source, replacement).length > 0) return 'material_content_removed'
   return 'unsafe_rewrite'
 }
 
 function isSafeTemplateReplacement(source: string, replacement: string) {
   return isSkillSlot(source)
     ? replacement.length <= source.length && isSafeSkillReorder(source, replacement)
-    : replacement.length < source.length && isSafeExperienceRewrite(source, replacement)
+    : isSafeExperienceRewrite(source, replacement)
 }
 
 type RequirementClassification = 'matched' | 'understated' | 'missing'
