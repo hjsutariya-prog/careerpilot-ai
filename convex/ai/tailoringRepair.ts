@@ -12,16 +12,15 @@ export function requiresTailoringJsonRepair(raw: string) {
   }
 }
 
-export function buildTailoringJsonRepairPrompt(malformedOutput: string) {
-  return `You are a JSON repair tool. Convert the MODEL OUTPUT below into one valid JSON object that exactly follows the supplied response schema.
+export function buildTailoringJsonRepairPrompt(originalPrompt: string) {
+  return `The previous response could not be parsed as valid JSON. Repeat the task below and return one valid JSON object that exactly follows the supplied response schema.
 
 Rules:
 - Return JSON only. Do not use Markdown or explain your work.
-- Preserve only information already present in MODEL OUTPUT.
+- Follow every factual-safety rule in the task exactly.
 - Do not invent resume facts, requirements, block IDs, edits, or analysis.
-- If a value cannot be recovered safely, use an empty array for that part of the response.
-- Never add an edit unless its blockId and replacement text are both present in MODEL OUTPUT.
+- If no safe edit is needed, return the required response shape with empty arrays.
 
-MODEL OUTPUT:
-${malformedOutput.slice(0, 12_000)}`
+TASK:
+${originalPrompt}`
 }

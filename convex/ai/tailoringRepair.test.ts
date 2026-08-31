@@ -8,11 +8,11 @@ describe('tailoring JSON repair', () => {
     expect(requiresTailoringJsonRepair('```json\n{"edits":[]}\n```')).toBe(false)
   })
 
-  it('does not send a resume or JD in the repair prompt', () => {
-    const prompt = buildTailoringJsonRepairPrompt('{"edits":')
-    expect(prompt).toContain('MODEL OUTPUT:')
-    expect(prompt).toContain('{"edits":')
-    expect(prompt).not.toContain('SOURCE RESUME')
-    expect(prompt).not.toContain('JOB DESCRIPTION')
+  it('reuses the original task so the low-cost retry can produce safe edits', () => {
+    const originalPrompt = 'JOB DESCRIPTION:\nBuild React tools\n\nSOURCE RESUME:\nBuilt React dashboards'
+    const prompt = buildTailoringJsonRepairPrompt(originalPrompt)
+    expect(prompt).toContain('previous response could not be parsed')
+    expect(prompt).toContain(originalPrompt)
+    expect(prompt).not.toContain('MODEL OUTPUT:')
   })
 })

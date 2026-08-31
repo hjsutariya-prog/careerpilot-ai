@@ -96,10 +96,10 @@ async function providerText(prompt: string, expectsTemplateEdits: boolean) {
   return await requestGeminiText({ ...tailoringGeminiConfig, prompt, ...(expectsTemplateEdits ? { schema: tailoringResponseSchema } : {}) })
 }
 
-async function repairedProviderText(malformedOutput: string) {
+async function repairedProviderText(originalPrompt: string) {
   return await requestGeminiText({
     ...tailoringJsonRepairGeminiConfig,
-    prompt: buildTailoringJsonRepairPrompt(malformedOutput),
+    prompt: buildTailoringJsonRepairPrompt(originalPrompt),
     schema: tailoringResponseSchema,
   })
 }
@@ -137,7 +137,7 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
     const malformedInitialResponse = Boolean(args.templateSlots)
       && (initialResponse.status === 'incomplete' || requiresTailoringJsonRepair(initialResponse.text))
     const text = (malformedInitialResponse
-      ? await repairedProviderText(initialResponse.text)
+      ? await repairedProviderText(prompt)
       : initialResponse.text).trim()
     if (args.templateSlots) {
       const replacements = templateReplacements(text, args.templateSlots)

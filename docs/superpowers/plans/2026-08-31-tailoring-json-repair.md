@@ -4,7 +4,7 @@
 
 **Goal:** Recover from a malformed Gemini tailoring response with one small schema-constrained repair request, without changing resume safety rules or product credits.
 
-**Architecture:** The first tailoring request remains unchanged. Only a response that cannot be parsed as any supported tailoring format triggers a second Gemini request containing that response alone. The repair response uses the existing schema and then proceeds through the existing parser and semantic validator.
+**Architecture:** The first tailoring request remains unchanged. Only a response that cannot be parsed as any supported tailoring format triggers one low-cost retry using the original task at lower thinking and output limits. The retry response uses the existing schema and then proceeds through the existing parser and semantic validator.
 
 **Tech Stack:** TypeScript, Convex actions, Gemini Interactions API, Vitest.
 
@@ -14,7 +14,7 @@
 
 - Do not alter DOCX rendering, credits, block IDs, factual validation, or the eight-edit cap.
 - Do not make a second request for valid-but-rejected tailoring output.
-- The repair request must not include the source resume or job description.
+- The retry must remain limited to one additional Gemini call with lower thinking and output limits.
 - Use `npm.cmd` for all npm commands.
 
 ---
@@ -45,7 +45,7 @@ export function requiresTailoringJsonRepair(raw: string) {
 }
 ```
 
-The repair prompt must ask only for valid JSON conforming to the supplied response schema and include the malformed output.
+The retry prompt must ask for valid JSON conforming to the supplied response schema and include the original tailoring task.
 
 - [ ] **Step 3: Run focused test**
 
