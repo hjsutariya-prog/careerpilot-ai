@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, templateReplacementDiagnostics, templateReplacements } from './tailoredResumes'
+import { isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, tailoringValidationDiagnostic, templateReplacementDiagnostics, templateReplacements } from './tailoredResumes'
 import { createResumeBlocks } from './ai/resumeBlocks'
 
 const blocks = createResumeBlocks
@@ -36,6 +36,25 @@ describe('tailored resume fallback', () => {
     expect(result.shape).toBe('invalid-json')
     expect('textLength' in result && result.textLength).toBe(9)
     expect('parserError' in result && result.parserError).toMatch(/JSON|Unexpected|end/i)
+  })
+
+  it('reports redacted validation diagnostics when all proposed edits are rejected', () => {
+    const slots = blocks([{ text: 'Built React dashboards for jane@example.com at +91 9876543210', editable: true }])
+    const diagnostic = tailoringValidationDiagnostic('{"analysis":{"matched":[],"understated":[{"requirement":"React dashboards","evidenceBlockIds":["paragraph_0"]}],"missing":[]},"edits":[{"blockId":"paragraph_0","text":"Built React dashboards for jane@example.com"}]}', slots)
+
+    expect(diagnostic.tailoring_result).toBe('all_proposed_edits_rejected')
+    expect(diagnostic.proposed_edits[0]).toEqual({
+      blockId: 'paragraph_0',
+      originalText: 'Built React dashboards for [redacted-email] at [redacted-phone]',
+      replacementText: 'Built React dashboards for [redacted-email]',
+    })
+    expect(diagnostic.validation.rejected_edits[0]?.reason).toBe('changed_number')
+  })
+
+  it('reports when the model proposes no edits', () => {
+    const diagnostic = tailoringValidationDiagnostic('{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[]}', blocks([{ text: 'Built React dashboards', editable: true }]))
+    expect(diagnostic.tailoring_result).toBe('model_proposed_no_edits')
+    expect(diagnostic.validation).toMatchObject({ accepted_edit_count: 0, rejected_edit_count: 0 })
   })
 
   it('reorders matching skills without changing the original DOCX slot length', () => {

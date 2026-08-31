@@ -7,7 +7,7 @@ import { tailoringGeminiConfig, tailoringJsonRepairGeminiConfig } from './ai/tai
 import { buildTailoringUserPrompt } from './ai/tailoringPrompt'
 import { buildTailoringJsonRepairPrompt, requiresTailoringJsonRepair } from './ai/tailoringRepair'
 import { emptyTailoringAnalysis, parseLegacyIndexedTailoringResponse, parseLegacyTailoringReplacements, parseTailoringResponse, tailoringResponseSchema, type ParsedTailoringResponse } from './ai/tailoringSchema'
-import { actionTense, isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, validateTailoringResponse } from './ai/tailoringValidation'
+import { actionTense, isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, validateTailoringResponse, type TailoringValidationResult } from './ai/tailoringValidation'
 import { areResumeBlocksConsistent, type ResumeBlock } from './ai/resumeBlocks'
 
 type Input = { resumeText: string; resumeFileName: string; title: string; companyName: string; description: string }
@@ -49,24 +49,36 @@ function legacyResponse(edits: ParsedTailoringResponse['edits']): ParsedTailorin
   return { analysis: emptyTailoringAnalysis(), edits, analysisProvided: false }
 }
 
-export function templateReplacements(text: string, slots: TemplateSlot[]) {
+type ParsedTemplateResponse = {
+  response: ParsedTailoringResponse
+  maxEdits?: number
+}
+
+function parsedTemplateResponse(text: string, slots: TemplateSlot[]): ParsedTemplateResponse | null {
   const response = parseTailoringResponse(text)
-  if (response) {
-    return replacementsForResponse(response, slots)
-  }
+  if (response) return { response }
   const legacyIndexedResponse = parseLegacyIndexedTailoringResponse(text)
   if (legacyIndexedResponse) {
-    const translatedResponse = legacyResponse(legacyIndexedResponse.edits.map((edit) => ({ blockId: slots[edit.index]?.blockId ?? `legacy_index_${edit.index}`, text: edit.text })))
-    return replacementsForResponse(translatedResponse, slots)
+    return { response: legacyResponse(legacyIndexedResponse.edits.map((edit) => ({ blockId: slots[edit.index]?.blockId ?? `legacy_index_${edit.index}`, text: edit.text }))) }
   }
   const values = parseLegacyTailoringReplacements(text)
   if (!values || values.length !== slots.length) return null
-  const responseFromReplacements = legacyResponse(values.flatMap((value, index) => typeof value === 'string' ? [{ blockId: slots[index].blockId, text: value }] : []))
-  return replacementsForResponse(responseFromReplacements, slots, values.length)
+  return {
+    response: legacyResponse(values.flatMap((value, index) => typeof value === 'string' ? [{ blockId: slots[index].blockId, text: value }] : [])),
+    maxEdits: values.length,
+  }
 }
 
-function replacementsForResponse(response: ParsedTailoringResponse, slots: TemplateSlot[], maxEdits?: number) {
-  const validation = validateTailoringResponse({ response, editableSlots: slots, maxEdits, enforceUnderstatedEditLinks: response.analysisProvided })
+function templateValidation(text: string, slots: TemplateSlot[]) {
+  const parsed = parsedTemplateResponse(text, slots)
+  if (!parsed) return null
+  return {
+    response: parsed.response,
+    validation: validateTailoringResponse({ response: parsed.response, editableSlots: slots, maxEdits: parsed.maxEdits, enforceUnderstatedEditLinks: parsed.response.analysisProvided }),
+  }
+}
+
+function replacementsForValidation(validation: TailoringValidationResult, slots: TemplateSlot[]) {
   const blocksById = new Map(slots.map((slot) => [slot.blockId, slot]))
   const replacements = slots.map((slot) => slot.text)
   for (const edit of validation.acceptedEdits) {
@@ -76,14 +88,14 @@ function replacementsForResponse(response: ParsedTailoringResponse, slots: Templ
   return replacements.some((replacement, index) => replacement !== slots[index].text) ? replacements : null
 }
 
+export function templateReplacements(text: string, slots: TemplateSlot[]) {
+  const result = templateValidation(text, slots)
+  return result ? replacementsForValidation(result.validation, slots) : null
+}
+
 export function templateReplacementDiagnostics(text: string, slots: TemplateSlot[]) {
-  const canonicalResponse = parseTailoringResponse(text)
-  if (canonicalResponse) return { shape: 'edits', ...validateTailoringResponse({ response: canonicalResponse, editableSlots: slots, enforceUnderstatedEditLinks: canonicalResponse.analysisProvided }).diagnostics }
-  const legacyIndexedResponse = parseLegacyIndexedTailoringResponse(text)
-  if (legacyIndexedResponse) {
-    const response = legacyResponse(legacyIndexedResponse.edits.map((edit) => ({ blockId: slots[edit.index]?.blockId ?? `legacy_index_${edit.index}`, text: edit.text })))
-    return { shape: 'edits', ...validateTailoringResponse({ response, editableSlots: slots }).diagnostics }
-  }
+  const result = templateValidation(text, slots)
+  if (result) return { shape: 'edits', ...result.validation.diagnostics }
   try {
     const fenced = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
     const candidate = JSON.parse(fenced.match(/\{[\s\S]*\}/)?.[0] ?? fenced)
@@ -91,6 +103,70 @@ export function templateReplacementDiagnostics(text: string, slots: TemplateSlot
     return { shape: 'invalid-edits', proposed: 0, editable: 0, safe: 0 }
   } catch (error) {
     return { shape: 'invalid-json', textLength: text.length, parserError: error instanceof Error ? error.message : 'unknown', proposed: 0, editable: 0, safe: 0 }
+  }
+}
+
+function redactDiagnosticText(value: string) {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]')
+    .replace(/(?<!\d)(?:\+?\d{1,3}[\s.-]?)?\d{10}(?!\d)/g, '[redacted-phone]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 500)
+}
+
+export type TailoringValidationDiagnostic = {
+  tailoring_result: 'model_response_unparseable' | 'model_proposed_no_edits' | 'all_proposed_edits_rejected' | 'accepted_edits'
+  analysis: { matched: Array<{ requirement: string; evidenceBlockIds: string[] }>; understated: Array<{ requirement: string; evidenceBlockIds: string[] }>; missing: Array<{ requirement: string }> }
+  proposed_edits: Array<{ blockId: string; originalText: string | null; replacementText: string }>
+  validation: {
+    accepted_edit_count: number
+    rejected_edit_count: number
+    accepted_block_ids: string[]
+    rejected_edits: Array<{ blockId: string; reason: string }>
+    rejected_evidence: TailoringValidationResult['rejectedEvidence']
+    rejected_requirements: TailoringValidationResult['rejectedRequirements']
+  }
+}
+
+export function tailoringValidationDiagnostic(text: string, slots: TemplateSlot[]): TailoringValidationDiagnostic {
+  const result = templateValidation(text, slots)
+  if (!result) {
+    return {
+      tailoring_result: 'model_response_unparseable',
+      analysis: emptyTailoringAnalysis(),
+      proposed_edits: [],
+      validation: { accepted_edit_count: 0, rejected_edit_count: 0, accepted_block_ids: [], rejected_edits: [], rejected_evidence: [], rejected_requirements: [] },
+    }
+  }
+  const blocksById = new Map(slots.map((slot) => [slot.blockId, slot]))
+  const proposedEdits = result.response.edits.slice(0, 8).map((edit) => ({
+    blockId: edit.blockId,
+    originalText: blocksById.get(edit.blockId) ? redactDiagnosticText(blocksById.get(edit.blockId)!.text) : null,
+    replacementText: redactDiagnosticText(edit.text),
+  }))
+  const analysis = {
+    matched: result.response.analysis.matched.slice(0, 12).map((item) => ({ requirement: redactDiagnosticText(item.requirement), evidenceBlockIds: item.evidenceBlockIds })),
+    understated: result.response.analysis.understated.slice(0, 12).map((item) => ({ requirement: redactDiagnosticText(item.requirement), evidenceBlockIds: item.evidenceBlockIds })),
+    missing: result.response.analysis.missing.slice(0, 12).map((item) => ({ requirement: redactDiagnosticText(item.requirement) })),
+  }
+  const { validation } = result
+  return {
+    tailoring_result: validation.acceptedEdits.length > 0
+      ? 'accepted_edits'
+      : result.response.edits.length === 0
+        ? 'model_proposed_no_edits'
+        : 'all_proposed_edits_rejected',
+    analysis,
+    proposed_edits: proposedEdits,
+    validation: {
+      accepted_edit_count: validation.acceptedEdits.length,
+      rejected_edit_count: validation.rejectedEdits.length,
+      accepted_block_ids: validation.acceptedEdits.map((edit) => edit.blockId),
+      rejected_edits: validation.rejectedEdits.map((edit) => ({ blockId: edit.blockId, reason: edit.reason })),
+      rejected_evidence: validation.rejectedEvidence.map((item) => ({ ...item, requirement: redactDiagnosticText(item.requirement) })),
+      rejected_requirements: validation.rejectedRequirements.map((item) => ({ ...item, requirement: redactDiagnosticText(item.requirement) })),
+    },
   }
 }
 
@@ -142,6 +218,8 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
       ? await repairedProviderText(prompt)
       : initialResponse.text).trim()
     if (args.templateSlots) {
+      const validationDiagnostic = tailoringValidationDiagnostic(text, args.templateSlots)
+      console.info('Resume tailoring validation diagnostic.', { durationMs: Date.now() - requestStartedAt, repairedMalformedJson: malformedInitialResponse, ...validationDiagnostic })
       const replacements = templateReplacements(text, args.templateSlots)
       if (replacements) return { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: replacements.join('\n'), replacements, mode: 'ai', reservationId: String(reservation.reservationId) }
       console.warn('Gemini tailoring response did not contain safe template-slot replacements.', { durationMs: Date.now() - requestStartedAt, repairedMalformedJson: malformedInitialResponse, ...templateReplacementDiagnostics(text, args.templateSlots) })
