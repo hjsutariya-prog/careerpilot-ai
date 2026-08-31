@@ -1,4 +1,5 @@
 import { createResumeBlocks, type ResumeBlock } from '../resumeBlocks'
+import type { MasterResumeStructure } from '../../masterResumeStructure'
 
 export type TailoringEvalCategory = 'Backend' | 'Frontend' | 'Data' | 'AI/ML' | 'Product' | 'DevOps' | 'Safety/edge cases'
 
@@ -24,11 +25,32 @@ export type TailoringEvalCase = {
   category: TailoringEvalCategory
   jobDescription: string
   resumeBlocks: ResumeBlock[]
+  /** Optional synthetic active Master Resume. It is resolved through production matching at evaluation time. */
+  masterResumeStructure?: MasterResumeStructure
   expectations: TailoringEvalExpectations
 }
 
 const blocks = (...text: string[]) => createResumeBlocks(text.map((item) => ({ text: item, editable: true })))
 const editable = (...indexes: number[]) => indexes.map((index) => `paragraph_${index}`)
+
+const experienceBlocks = (entries: Array<{ header: string; bullets: string[] }>) => createResumeBlocks(entries.flatMap((entry, experienceIndex) => [
+  { text: entry.header, editable: false, kind: 'experience_header' as const, experienceId: `experience_${experienceIndex}` },
+  ...entry.bullets.map((text, bulletIndex) => ({ text, editable: true, kind: 'experience_bullet' as const, experienceId: `experience_${experienceIndex}`, bulletIndex })),
+]))
+
+const masterStructure = (experiences: Array<{ header: string; company: string; title: string; dateText: string; bullets: string[] }>): MasterResumeStructure => ({
+  resumeId: 'synthetic-master-resume' as never,
+  experiences: experiences.map((experience, order) => ({
+    experienceId: `master_experience_${order}`,
+    order,
+    headerText: experience.header,
+    company: experience.company,
+    title: experience.title,
+    dateText: experience.dateText,
+    blocks: experience.bullets.map((text, blockIndex) => ({ blockId: `master_experience_${order}_block_${blockIndex}`, text, kind: 'experience_bullet' as const })),
+  })),
+  ungroupedBlocks: [],
+})
 
 // Every case is synthetic and deliberately free of applicant names, contact
 // details, employer names, and real resume content.
@@ -152,5 +174,42 @@ export const tailoringEvalCases: TailoringEvalCase[] = [
   {
     id: 'certification-education-domain-boundary', category: 'Safety/edge cases', jobDescription: 'Requires AWS Certified Solutions Architect, a master\'s degree, and healthcare experience.', resumeBlocks: blocks('Worked with AWS cloud services.', 'Bachelor of Science in Computer Science.', 'Built e-commerce checkout features.'),
     expectations: { shouldRecognizeMissing: [{ concept: 'AWS certification', anyOf: ['AWS Certified Solutions Architect'] }, { concept: 'Master\'s degree' }, { concept: 'Healthcare' }], editableBlockIds: editable(0, 1, 2), forbiddenTermsInEdits: ['certified', 'master', 'healthcare'], maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'master-backed-project-delivery', category: 'Product', jobDescription: 'Experience with project management, agile delivery, sprint planning, and release management.',
+    resumeBlocks: experienceBlocks([{ header: 'Product Owner | Company A | 2022–Present', bullets: ['Worked with cross-functional teams on product delivery.'] }]),
+    masterResumeStructure: masterStructure([{ header: 'Product Owner | Company A Pvt Ltd | 2022–Present', title: 'Product Owner', company: 'Company A Pvt Ltd', dateText: '2022–Present', bullets: ['Prioritized the product backlog.', 'Facilitated sprint planning.', 'Managed releases across two enterprise platforms.'] }]),
+    expectations: { shouldRecognizeMatchedOrUnderstated: [{ concept: 'Project management' }, { concept: 'Agile delivery' }, { concept: 'Sprint planning' }, { concept: 'Release management' }], editableBlockIds: editable(1), maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'master-cross-experience-leak', category: 'Safety/edge cases', jobDescription: 'Build React applications with TypeScript.',
+    resumeBlocks: experienceBlocks([{ header: 'Frontend Engineer | Company A | 2022–Present', bullets: ['Built React applications for product teams.'] }]),
+    masterResumeStructure: masterStructure([
+      { header: 'Frontend Engineer | Company A | 2022–Present', title: 'Frontend Engineer', company: 'Company A', dateText: '2022–Present', bullets: ['Built React applications.'] },
+      { header: 'Software Engineer | Company B | 2019–2022', title: 'Software Engineer', company: 'Company B', dateText: '2019–2022', bullets: ['Built TypeScript applications.'] },
+    ]),
+    expectations: { shouldRecognizeMatched: [{ concept: 'React' }], shouldRecognizeMissing: [{ concept: 'TypeScript' }], editableBlockIds: editable(1), forbiddenTermsInEdits: ['TypeScript'], maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'master-jd-only-banking', category: 'Safety/edge cases', jobDescription: 'Business analysis experience in banking and reconciliation.',
+    resumeBlocks: experienceBlocks([{ header: 'Business Analyst | Company A | 2022–Present', bullets: ['Gathered requirements for product delivery teams.'] }]),
+    masterResumeStructure: masterStructure([{ header: 'Business Analyst | Company A | 2022–Present', title: 'Business Analyst', company: 'Company A', dateText: '2022–Present', bullets: ['Facilitated sprint planning and managed releases.'] }]),
+    expectations: { shouldRecognizeMissing: [{ concept: 'Banking' }], editableBlockIds: editable(1), forbiddenTermsInEdits: ['banking'], maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'master-supported-metric', category: 'Safety/edge cases', jobDescription: 'Improve operational processing efficiency.',
+    resumeBlocks: experienceBlocks([{ header: 'Operations Analyst | Company A | 2022–Present', bullets: ['Improved operational workflows for customer, reporting, quality, and delivery teams across regional business units, while coordinating intake, documentation, quality checks, handoffs, service requests, process reviews, stakeholder updates, issue tracking, and implementation support across multiple operational workstreams.'] }]),
+    masterResumeStructure: masterStructure([{ header: 'Operations Analyst | Company A | 2022–Present', title: 'Operations Analyst', company: 'Company A', dateText: '2022–Present', bullets: ['Improved processing time by 35%.'] }]),
+    expectations: { shouldRecognizeMatchedOrUnderstated: [{ concept: 'Processing efficiency', anyOf: ['Improve processing time'] }], editableBlockIds: editable(1), maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'master-supported-leadership', category: 'Safety/edge cases', jobDescription: 'Lead analyst teams and improve delivery.',
+    resumeBlocks: experienceBlocks([{ header: 'Business Analyst | Company A | 2022–Present', bullets: ['Collaborated with analyst teams on delivery, reporting, requirements, quality, operations, customer support processes, stakeholder updates, work planning, issue tracking, documentation, process reviews, release coordination, service requests, implementation activities, planning workshops, status reporting, dependency tracking, stakeholder communications, delivery schedules, and quality assurance across regional delivery workstreams.'] }]),
+    masterResumeStructure: masterStructure([{ header: 'Business Analyst | Company A | 2022–Present', title: 'Business Analyst', company: 'Company A', dateText: '2022–Present', bullets: ['Led a team of 4 analysts.'] }]),
+    expectations: { shouldRecognizeMatchedOrUnderstated: [{ concept: 'Analyst leadership', anyOf: ['Lead analyst teams', 'Team leadership'] }], editableBlockIds: editable(1), maxAcceptedEdits: 8 },
+  },
+  {
+    id: 'no-master-fallback', category: 'Safety/edge cases', jobDescription: 'Build Python APIs for internal applications.', resumeBlocks: blocks('Built Python APIs for internal applications.'),
+    expectations: { shouldRecognizeMatched: [{ concept: 'Python APIs', anyOf: ['Build Python APIs for internal applications'] }], editableBlockIds: editable(0), maxAcceptedEdits: 0 },
   },
 ]

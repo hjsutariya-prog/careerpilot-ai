@@ -4,6 +4,7 @@ import { v } from 'convex/values'
 import type { Id } from './_generated/dataModel'
 import { PROFILE_SCHEMA_VERSION, type ResumeProfile } from './resumeProfiles'
 import { requestGeminiText } from './gemini'
+import { selectLatestTemplateResume } from './resumeRecords'
 
 export const SCORE_VERSION = 1
 
@@ -129,7 +130,8 @@ export const inputForSearchRun = internalQuery({
   handler: async (ctx, args) => {
     const searchRun = await ctx.db.get(args.searchRunId)
     if (!searchRun) return null
-    const resume = await ctx.db.query('resumes').withIndex('by_owner', (q) => q.eq('ownerId', searchRun.ownerId)).order('desc').first()
+    const resumes = await ctx.db.query('resumes').withIndex('by_owner', (q) => q.eq('ownerId', searchRun.ownerId)).order('desc').collect()
+    const resume = selectLatestTemplateResume(resumes)
     if (!resume?.contentHash || !resume.extractedText) return { state: 'missing_resume' as const }
     const profile = await ctx.db.query('resumeProfiles').withIndex('by_owner_hash_version', (q) => q.eq('ownerId', searchRun.ownerId).eq('sourceHash', resume.contentHash!).eq('schemaVersion', PROFILE_SCHEMA_VERSION)).first()
     if (!profile || profile.status === 'queued' || profile.status === 'generating') return { state: 'profile_pending' as const }

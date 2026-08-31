@@ -4,6 +4,7 @@ import { v } from 'convex/values'
 import { requireOwner } from './owner'
 import type { Id } from './_generated/dataModel'
 import { requestGeminiText } from './gemini'
+import { selectLatestTemplateResume } from './resumeRecords'
 
 export const PROFILE_SCHEMA_VERSION = 1
 
@@ -135,12 +136,15 @@ export const finish = internalMutation({
 export const ensureForResume = internalAction({
   args: { resumeId: v.id('resumes') },
   handler: async (ctx, args): Promise<{ status: 'skipped' | 'reused' | 'ready' | 'failed'; profileId?: Id<'resumeProfiles'> }> => {
-    const resume = await ctx.runQuery(internal.resumeProfiles.resumeForProfile, args) as { ownerId: string; contentHash?: string; extractedText: string } | null
+    const resume = await ctx.runQuery(internal.resumeProfiles.resumeForProfile, args) as { _id: Id<'resumes'>; ownerId: string; contentHash?: string; extractedText: string; purpose?: 'template' | 'master'; isActiveMaster?: boolean } | null
     if (!resume) return { status: 'skipped' as const }
+    if (resume.purpose === 'master' && resume.isActiveMaster) await ctx.scheduler.runAfter(0, internal.masterResumeStructure.ensureForMaster, { resumeId: args.resumeId })
     const sourceHash = resume.contentHash ?? await sha256Text(resume.extractedText)
     if (!resume.contentHash) await ctx.runMutation(internal.resumeProfiles.setContentHash, { resumeId: args.resumeId, contentHash: sourceHash })
     const existing = await ctx.runQuery(internal.resumeProfiles.existingForHash, { ownerId: resume.ownerId, sourceHash }) as { _id: Id<'resumeProfiles'>; status: 'queued' | 'generating' | 'ready' | 'failed' } | null
-    if (existing && existing.status !== 'failed') return { status: 'reused' as const, profileId: existing._id }
+    if (existing && existing.status !== 'failed') {
+      return { status: 'reused' as const, profileId: existing._id }
+    }
     const profileId = await ctx.runMutation(internal.resumeProfiles.createForResume, args) as Id<'resumeProfiles'> | null
     if (!profileId) return { status: 'skipped' as const }
     await ctx.runMutation(internal.resumeProfiles.markGenerating, { profileId })
@@ -162,7 +166,8 @@ export const mine = query({
   args: {},
   handler: async (ctx) => {
     const ownerId = await requireOwner(ctx, 'Please sign in before viewing your resume analysis.')
-    const resume = await ctx.db.query('resumes').withIndex('by_owner', (q) => q.eq('ownerId', ownerId)).order('desc').first()
+    const resumes = await ctx.db.query('resumes').withIndex('by_owner', (q) => q.eq('ownerId', ownerId)).order('desc').collect()
+    const resume = selectLatestTemplateResume(resumes)
     if (!resume?.contentHash) return null
     return await ctx.db.query('resumeProfiles').withIndex('by_owner_hash_version', (q) => q.eq('ownerId', ownerId).eq('sourceHash', resume.contentHash!).eq('schemaVersion', PROFILE_SCHEMA_VERSION)).first()
   },

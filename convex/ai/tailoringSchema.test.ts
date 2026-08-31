@@ -14,12 +14,48 @@ describe('tailoring response schema', () => {
     })
   })
 
+  it('preserves optional Master block provenance without changing Template-only responses', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[{"requirement":"Agile delivery","evidenceBlockIds":["paragraph_1"],"masterBlockIds":["master_experience_0_block_0"]}],"understated":[],"missing":[]},"edits":[{"blockId":"paragraph_1","text":"Worked on agile delivery.","sourceMasterBlockIds":["master_experience_0_block_0"]}],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_1","paragraph_2"],"targetBlockId":"paragraph_1","text":"Merged delivery work.","sourceMasterBlockIds":["master_experience_0_block_0"]}]}')).toMatchObject({
+      analysis: { matched: [{ requirement: 'Agile delivery', evidenceBlockIds: ['paragraph_1'], masterBlockIds: ['master_experience_0_block_0'] }] },
+      edits: [{ blockId: 'paragraph_1', sourceMasterBlockIds: ['master_experience_0_block_0'] }],
+      merges: [{ sourceMasterBlockIds: ['master_experience_0_block_0'] }],
+    })
+  })
+
   it('uses an empty analysis for the previous edits-only response format', () => {
     expect(parseTailoringResponse('{"edits":[{"blockId":"paragraph_1","text":"Built React tools"}]}')).toEqual({
       analysis: { matched: [], understated: [], missing: [] },
       edits: [{ blockId: 'paragraph_1', text: 'Built React tools' }],
       analysisProvided: false,
     })
+  })
+
+  it('parses an optional pure experience-bullet reorder plan', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_3","paragraph_2"]}]}')).toMatchObject({
+      analysis: { matched: [], understated: [], missing: [] },
+      edits: [],
+      reorders: [{ experienceId: 'experience_0', blockIds: ['paragraph_3', 'paragraph_2'] }],
+      analysisProvided: true,
+    })
+  })
+
+  it('rejects a malformed reorder plan', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"reorders":[{"experienceId":"experience_0","blockIds":[3]}]}')).toBeNull()
+  })
+
+  it('parses an optional two-source evidence-backed merge plan', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_2","paragraph_3"],"targetBlockId":"paragraph_2","text":"Managed product delivery."}]}')).toMatchObject({
+      merges: [{
+        experienceId: 'experience_0',
+        sourceBlockIds: ['paragraph_2', 'paragraph_3'],
+        targetBlockId: 'paragraph_2',
+        text: 'Managed product delivery.',
+      }],
+    })
+  })
+
+  it('rejects a merge that does not contain exactly two source IDs', () => {
+    expect(parseTailoringResponse('{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_2"],"targetBlockId":"paragraph_2","text":"Merged text"}]}')).toBeNull()
   })
 
   it('rejects malformed JSON', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, tailoringValidationDiagnostic, templateReplacementDiagnostics, templateReplacements } from './tailoredResumes'
+import { isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, tailoringValidationDiagnostic, templateMerges, templateReplacementDiagnostics, templateReorders, templateReplacements, templateSlotsForGemini } from './tailoredResumes'
 import { createResumeBlocks } from './ai/resumeBlocks'
 
 const blocks = createResumeBlocks
@@ -13,6 +13,77 @@ describe('tailored resume fallback', () => {
 
   it('creates a safe DOCX file name', () => {
     expect(tailoredFileName('Priya Shah.pdf', 'React Engineer', 'Northstar')).toBe('priya-shah-react-engineer-northstar-tailored.docx')
+  })
+
+  it('provides experience grouping metadata to Gemini for safe reorder plans', () => {
+    const slots = blocks([
+      { text: 'Product Owner | Company A | 2022–Present', editable: false, kind: 'experience_header', experienceId: 'experience_0' },
+      { text: 'Prioritized product backlog', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 },
+    ])
+
+    expect(templateSlotsForGemini(slots)).toEqual([
+      { blockId: 'paragraph_0', index: 0, text: 'Product Owner | Company A | 2022–Present', editable: false, kind: 'experience_header', experienceId: 'experience_0' },
+      { blockId: 'paragraph_1', index: 1, text: 'Prioritized product backlog', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 },
+    ])
+  })
+
+  it('accepts a text edit and bullet reorder independently', () => {
+    const slots = blocks([
+      { text: 'EXPERIENCE', editable: false, kind: 'heading' },
+      { text: 'Product Owner | Company A | 2022–Present', editable: false, kind: 'experience_header', experienceId: 'experience_0' },
+      { text: '• Coordinated stakeholders', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 },
+      { text: '• Managed releases', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 1 },
+    ])
+    const response = '{"analysis":{"matched":[],"understated":[{"requirement":"Release management","evidenceBlockIds":["paragraph_3"]}],"missing":[]},"edits":[{"blockId":"paragraph_3","text":"• Led releases"}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_3","paragraph_2"]}]}'
+
+    expect(templateReplacements(response, slots)).toEqual([
+      'EXPERIENCE',
+      'Product Owner | Company A | 2022–Present',
+      '• Coordinated stakeholders',
+      '• Led releases',
+    ])
+    expect(templateReorders(response, slots)).toEqual([{ experienceId: 'experience_0', blockIds: ['paragraph_3', 'paragraph_2'] }])
+  })
+
+  it('keeps responses without reorders fully compatible', () => {
+    const slots = blocks([{ text: 'Built React dashboards', editable: true }])
+    expect(templateReorders('{"edits":[{"blockId":"paragraph_0","text":"Built React tools"}]}', slots)).toEqual([])
+    expect(templateMerges('{"edits":[{"blockId":"paragraph_0","text":"Built React tools"}]}', slots)).toEqual([])
+  })
+
+  it('applies an evidence-backed merge before validating a reorder of surviving bullets', () => {
+    const slots = blocks([
+      { text: 'EXPERIENCE', editable: false, kind: 'heading' },
+      { text: 'Product Owner | Company A | 2022–Present', editable: false, kind: 'experience_header', experienceId: 'experience_0' },
+      { text: 'Prioritized product backlog and facilitated sprint planning.', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 },
+      { text: 'Managed releases across two enterprise platforms.', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 1 },
+      { text: 'Coordinated stakeholders for UAT.', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 2 },
+    ])
+    const response = '{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_2","paragraph_3"],"targetBlockId":"paragraph_2","text":"Managed delivery across two enterprise platforms: backlog prioritization, sprint planning, and releases."}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_4","paragraph_2"]}]}'
+
+    expect(templateMerges(response, slots)).toEqual([{ experienceId: 'experience_0', sourceBlockIds: ['paragraph_2', 'paragraph_3'], targetBlockId: 'paragraph_2', text: 'Managed delivery across two enterprise platforms: backlog prioritization, sprint planning, and releases.' }])
+    expect(templateReplacements(response, slots)).toEqual([
+      'EXPERIENCE',
+      'Product Owner | Company A | 2022–Present',
+      'Managed delivery across two enterprise platforms: backlog prioritization, sprint planning, and releases.',
+      'Managed releases across two enterprise platforms.',
+      'Coordinated stakeholders for UAT.',
+    ])
+    expect(templateReorders(response, slots)).toEqual([{ experienceId: 'experience_0', blockIds: ['paragraph_4', 'paragraph_2'] }])
+  })
+
+  it('rejects merge conflicts and a reorder that still references a removed bullet', () => {
+    const slots = blocks([
+      { text: 'Product Owner | Company A | 2022–Present', editable: false, kind: 'experience_header', experienceId: 'experience_0' },
+      { text: 'Prioritized product backlog and facilitated sprint planning.', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 0 },
+      { text: 'Managed releases across two enterprise platforms.', editable: true, kind: 'experience_bullet', experienceId: 'experience_0', bulletIndex: 1 },
+    ])
+    const merge = '{"experienceId":"experience_0","sourceBlockIds":["paragraph_1","paragraph_2"],"targetBlockId":"paragraph_1","text":"Managed delivery across two enterprise platforms: backlog prioritization, sprint planning, and releases."}'
+    const editConflict = `{"analysis":{"matched":[],"understated":[{"requirement":"Release management","evidenceBlockIds":["paragraph_1"]}],"missing":[]},"edits":[{"blockId":"paragraph_1","text":"Prioritized product backlog and facilitated sprint planning."}],"merges":[${merge}]}`
+    const reorderConflict = `{"analysis":{"matched":[],"understated":[],"missing":[]},"edits":[],"merges":[${merge}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_1","paragraph_2"]}]}`
+
+    expect(templateMerges(editConflict, slots)).toEqual([])
+    expect(templateReorders(reorderConflict, slots)).toEqual([])
   })
 
   it('keeps only an oversized slot unchanged while accepting safe rewrites', () => {

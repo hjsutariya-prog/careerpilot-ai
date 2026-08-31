@@ -1,5 +1,6 @@
 import { parseTailoringResponse, type ParsedTailoringResponse, type TailoringResponse } from '../tailoringSchema'
 import { isSafeSkillReorder, validateTailoringResponse, type TailoringValidationResult } from '../tailoringValidation'
+import { masterEvidenceForTemplateSlots, resolveMasterSources } from '../tailoringMasterProvenance'
 import type { TailoringEvalCase, TailoringEvalCategory, TailoringEvalRequirementExpectation } from './tailoringEvalCases'
 
 type RequirementCategory = 'matched' | 'understated' | 'missing'
@@ -103,7 +104,7 @@ const namedTechnologyAliases = [
   ['aws certified solutions architect'], ['aws certified'], ['azure certification'], ['google cloud certification'],
 ] as const
 
-const numbersIn = (value: string) => value.match(/\b\d+(?:[.,]\d+)?%?\b/g) ?? []
+const numbersIn = (value: string): string[] => value.match(/\b\d+(?:[.,]\d+)?%?\b/g) ?? []
 
 const wordForms: Record<string, string> = {
   api: 'api',
@@ -175,12 +176,17 @@ export function requirementConceptMatches(expected: TailoringEvalRequirementExpe
   })
 }
 
+export function masterEvidenceForEvalCase(evalCase: TailoringEvalCase) {
+  return masterEvidenceForTemplateSlots(evalCase.resumeBlocks, evalCase.masterResumeStructure)
+}
+
 function validationFor(evalCase: TailoringEvalCase, response: TailoringResponse, enforceUnderstatedEditLinks: boolean) {
   return validateTailoringResponse({
     response,
     editableSlots: evalCase.resumeBlocks,
     maxEdits: 8,
     enforceUnderstatedEditLinks,
+    masterEvidence: masterEvidenceForEvalCase(evalCase),
   })
 }
 
@@ -203,6 +209,13 @@ function expectedRequirements(validation: TailoringValidationResult, category: E
 
 export function summarizeTailoringEvaluation(evalCase: TailoringEvalCase, response: TailoringResponse, validation: TailoringValidationResult): TailoringEvalSummary {
   const blocksById = new Map(evalCase.resumeBlocks.map((block) => [block.blockId, block]))
+  const masterEvidence = masterEvidenceForEvalCase(evalCase)
+  const sourceEvidenceForEdit = (edit: TailoringResponse['edits'][number]) => {
+    const templateBlock = blocksById.get(edit.blockId)
+    if (!templateBlock) return ''
+    const masterSources = resolveMasterSources({ templateBlock, sourceMasterBlockIds: edit.sourceMasterBlockIds, masterEvidence })
+    return `${templateBlock.text}\n${masterSources.ok ? masterSources.blocks.map((block) => block.text).join('\n') : ''}`
+  }
   const understatedEvidence = new Set(validation.analysis.understated.flatMap((item) => item.evidenceBlockIds))
   const matchedEvidence = new Set(validation.analysis.matched.flatMap((item) => item.evidenceBlockIds))
   const accepted = validation.acceptedEdits
@@ -223,7 +236,11 @@ export function summarizeTailoringEvaluation(evalCase: TailoringEvalCase, respon
   })
   const changedNumbers = accepted.flatMap((edit) => {
     const source = blocksById.get(edit.blockId)?.text ?? ''
-    return numbersIn(source).join('\u0000') === numbersIn(edit.text).join('\u0000') ? [] : [edit.blockId]
+    const supportedEvidence = sourceEvidenceForEdit(edit)
+    const sourceNumbers = numbersIn(source)
+    const replacementNumbers = numbersIn(edit.text)
+    const allReplacementNumbersSupported = replacementNumbers.every((value) => numbersIn(supportedEvidence).includes(value))
+    return sourceNumbers.every((value) => replacementNumbers.includes(value)) && allReplacementNumbersSupported ? [] : [edit.blockId]
   })
   const leadershipUpgradeViolations = [...new Set(accepted.flatMap((edit) => {
     const source = blocksById.get(edit.blockId)?.text ?? ''
@@ -240,7 +257,7 @@ export function summarizeTailoringEvaluation(evalCase: TailoringEvalCase, respon
     return understatedEvidence.has(edit.blockId) || (matchedEvidence.has(edit.blockId) && isSafeSkillReorder(source, edit.text)) ? [] : [edit.blockId]
   })
   const unsupportedNamedTechnologySurvivals = [...new Set(accepted.flatMap((edit) => {
-    const sourceTechnologies = new Set(namedTechnologiesIn(resumeEvidence))
+    const sourceTechnologies = new Set(namedTechnologiesIn(sourceEvidenceForEdit(edit) || resumeEvidence))
     return namedTechnologiesIn(edit.text)
       .filter((technology) => !sourceTechnologies.has(technology) && missingNamedTechnologies.has(technology))
       .map((technology) => namedTechnologyAliases[technology][0])

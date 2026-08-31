@@ -5,7 +5,7 @@ import { tailoringGeminiConfig } from '../convex/ai/tailoringGeminiConfig'
 import { buildTailoringUserPrompt } from '../convex/ai/tailoringPrompt'
 import { parseTailoringResponse, tailoringResponseSchema, type TailoringAnalysis, type TailoringEdit } from '../convex/ai/tailoringSchema'
 import { validateTailoringResponse, type RejectedTailoringEdit, type ValidatedTailoringEdit } from '../convex/ai/tailoringValidation'
-import { evaluateRawTailoringResponse, summarizeTailoringEvaluation, summarizeTailoringEvalRuns, type TailoringEvalMultiRunSummary, type TailoringEvalSummary } from '../convex/ai/evals/tailoringEval'
+import { evaluateRawTailoringResponse, masterEvidenceForEvalCase, summarizeTailoringEvaluation, summarizeTailoringEvalRuns, type TailoringEvalMultiRunSummary, type TailoringEvalSummary } from '../convex/ai/evals/tailoringEval'
 import { tailoringEvalCases, type TailoringEvalCase } from '../convex/ai/evals/tailoringEvalCases'
 
 export type LiveTailoringEvalCaseResult = {
@@ -70,6 +70,15 @@ export function parseTailoringEvalRuns(args: string[] = process.argv.slice(2)) {
   return runs
 }
 
+export type TailoringEvalRunOptions = { runs: number; caseId?: string }
+
+export function parseTailoringEvalOptions(args: string[] = process.argv.slice(2)): TailoringEvalRunOptions {
+  const caseArgument = args.find((argument) => argument.startsWith('--case='))
+  const caseId = caseArgument?.slice('--case='.length).trim()
+  if (caseArgument && !caseId) throw new Error('--case must name an evaluation case')
+  return { runs: parseTailoringEvalRuns(args), ...(caseId ? { caseId } : {}) }
+}
+
 function promptFor(evalCase: TailoringEvalCase) {
   return buildTailoringUserPrompt({
     jobTitle: 'Synthetic evaluation role',
@@ -77,6 +86,7 @@ function promptFor(evalCase: TailoringEvalCase) {
     jobDescription: evalCase.jobDescription,
     resumeText: evalCase.resumeBlocks.map((block) => block.text).join('\n'),
     editableSlots: evalCase.resumeBlocks,
+    masterEvidence: masterEvidenceForEvalCase(evalCase),
   })
 }
 
@@ -106,6 +116,7 @@ async function runCase(evalCase: TailoringEvalCase, run: number): Promise<LiveTa
       editableSlots: evalCase.resumeBlocks,
       maxEdits: 8,
       enforceUnderstatedEditLinks: parsed.analysisProvided,
+      masterEvidence: masterEvidenceForEvalCase(evalCase),
     })
     const evaluator = summarizeTailoringEvaluation(evalCase, parsed, validation)
     return {
@@ -134,12 +145,14 @@ async function runCase(evalCase: TailoringEvalCase, run: number): Promise<LiveTa
   }
 }
 
-export async function runTailoringEval({ runs = 1 }: { runs?: number } = {}): Promise<LiveTailoringEvalRun> {
+export async function runTailoringEval({ runs = 1, caseId }: TailoringEvalRunOptions = { runs: 1 }): Promise<LiveTailoringEvalRun> {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is required. Set it locally before running npm run eval:tailoring.')
   if (!Number.isInteger(runs) || runs < 1) throw new Error('runs must be a positive integer')
 
+  const selectedCases = caseId ? tailoringEvalCases.filter((evalCase) => evalCase.id === caseId) : tailoringEvalCases
+  if (caseId && !selectedCases.length) throw new Error(`Unknown tailoring evaluation case: ${caseId}`)
   const results: LiveTailoringEvalCaseResult[] = []
-  for (const evalCase of tailoringEvalCases) {
+  for (const evalCase of selectedCases) {
     for (let run = 1; run <= runs; run += 1) {
       const result = await runCase(evalCase, run)
       results.push(result)
@@ -150,7 +163,7 @@ export async function runTailoringEval({ runs = 1 }: { runs?: number } = {}): Pr
   const summary = summarizeTailoringEvalRuns(results.map((result) => result.evaluator), runs)
   const outputPath = resolve(process.cwd(), 'tmp', 'tailoring-eval-results.json')
   await mkdir(dirname(outputPath), { recursive: true })
-  await writeFile(outputPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), model: tailoringGeminiConfig.model, runs, cases: results, summary }, null, 2)}\n`, 'utf8')
+  await writeFile(outputPath, `${JSON.stringify({ generatedAt: new Date().toISOString(), model: tailoringGeminiConfig.model, runs, ...(caseId ? { caseId } : {}), cases: results, summary }, null, 2)}\n`, 'utf8')
   console.log('\nCategory results:')
   for (const [category, categorySummary] of Object.entries(summary.categories)) console.log(`${category}: ${categorySummary.passed}/${categorySummary.total} passed`)
   console.log(`\n${summary.totalCases} evaluated cases across ${runs} run${runs === 1 ? '' : 's'} (${summary.totalModelCalls} model calls)`)

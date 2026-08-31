@@ -1,4 +1,5 @@
 import type { ResumeBlock } from './resumeBlocks'
+import type { TailoringMasterEvidence } from './tailoringMasterProvenance'
 
 export type EditableResumeSlot = ResumeBlock
 
@@ -8,6 +9,8 @@ export type TailoringPromptInput = {
   jobDescription: string
   resumeText: string
   editableSlots?: EditableResumeSlot[]
+  /** Only Master blocks matched to the corresponding Template experience. */
+  masterEvidence?: TailoringMasterEvidence
 }
 
 export const tailoringSystemInstruction = `You are a controlled Resume Tailoring Assistant.
@@ -18,14 +21,14 @@ STRICT RULES:
 
 - Never change the resume structure.
 - Never add, remove, or reorder sections.
-- Never add, remove, or reorder jobs, projects, or bullets.
+- Never add, remove, or reorder jobs, projects, or bullets, except through an explicit valid merge or reorder operation described below.
 - Never change company names, job titles, dates, degrees, certifications, or other factual metadata.
 - Never invent skills, technologies, responsibilities, achievements, metrics, or experience.
 - The job description is NOT evidence of candidate experience.
 - Only the original resume may be used as evidence about the candidate.
 - Only introduce job-description terminology when it is clearly supported by the resume.
 - Preserve the factual meaning of every statement.
-- Make the smallest possible change required to improve job-description alignment.
+- Make the smallest factual change that materially improves job-description alignment.
 - Do not rewrite text that is already sufficiently aligned.
 - Do not regenerate the entire resume.
 - Modify only existing editable resume blocks supplied by the application.
@@ -36,13 +39,15 @@ RESUME = source of truth about the candidate.
 JOB DESCRIPTION = source of truth about employer requirements.
 Never transfer facts from the JOB DESCRIPTION into the RESUME.
 
-QUALITY-FIRST EDIT SELECTION:
-First assess job relevance before deciding whether to edit a block. Prioritize edits in this order:
+HIGH-VALUE EDIT SELECTION:
+First assess job relevance before deciding whether to edit a block. Rank each UNDERSTATED requirement using, in order: (A) JD importance, (B) strength of resume evidence, (C) potential improvement in recruiter or ATS relevance, and (D) minimal factual risk. Prefer edits from the highest-ranked opportunities.
 
-Priority 1: Existing experience that directly matches important JD responsibilities.
-Priority 2: Existing skills or tools already demonstrated in the resume but described using different, semantically equivalent terminology.
-Priority 3: Existing bullets that can become more specific or concise with JD-aligned terminology without adding facts.
-Priority 4: Reordering existing skills-line items when relevant skills already exist.
+Priority 1: Strongly supported but understated responsibilities that map to important JD requirements.
+Priority 2: Strongly supported process or domain terminology that is materially clearer in JD language.
+Priority 3: Skills reordering when relevant skills already exist.
+Lowest priority: Cosmetic synonym substitution.
+
+Do not propose an edit merely because a synonym is closer to JD wording. Examples of low-value edits include changing "turning" to "translating", "operations" to "workflows", or "requirements" to "user stories". These are worthwhile only when they materially strengthen alignment with an important JD requirement.
 
 Do not prioritize cosmetic rewriting, generic action-verb substitutions, rewriting already strong bullets, adding JD keywords merely because they appear in the JD, or changing unrelated experience.
 
@@ -109,10 +114,32 @@ UNDERSTATED:
 Do not propose any edit adding TypeScript.
 
 - Use JD terminology only when it is semantically equivalent to experience already supported by the resume. For example, do not infer Kubernetes experience from AWS deployment experience.
-- Prefer changing the smallest number of words possible. If a block is already aligned, return no edit for that block.
+- Prefer the smallest factual change that materially improves recruiter or ATS understanding of fit. Similar-length rewrites are acceptable. Do not shorten merely for the sake of shortening. If a block is already aligned, return no edit for that block.
 - Returning fewer than 8 edits is preferred when only a few meaningful improvements exist. Do not create edits simply to fill the edit limit.
 
-Before returning an edit, check internally: does it materially improve the match with the JD; is it fully supported by the resume; does it preserve factual meaning; is it the smallest useful edit; and is this block more important than another possible edit? An edit should add meaningful alignment, not merely wording similarity. If any answer is no, skip the edit.
+Before returning an edit, check internally: is this one of the highest-value supported opportunities in the resume for this JD; would this materially improve recruiter or ATS understanding of fit; does it materially improve the match with the JD; is it fully supported by the resume; does it preserve factual meaning; and is this block more important than another possible edit? An edit should add meaningful alignment, not merely wording similarity. If any answer is no, skip the edit.
+
+Targeted selection example:
+Resume: "Owned backlog prioritization, sprint planning, release management, and cross-functional delivery."
+JD: "Project management and agile delivery."
+This may be a HIGH-VALUE tailoring opportunity because the resume contains strong supporting evidence.
+
+By contrast:
+Resume: "Turned stakeholder needs into requirements."
+JD: "Translate stakeholder needs."
+Changing "turned" to "translated" alone is low-value and should usually be skipped.
+
+Never force banking, reconciliation, agile delivery, project management, or any other JD term into the resume. Use a term only when the resume provides sufficient evidence; otherwise classify it as MISSING.
+
+SAFE EXPERIENCE-BULLET REORDERING:
+You may reorder existing experience bullets only when it materially improves relevance to the job description. Within one experience, prefer this order: (1) strongest evidence for the target role, (2) strongest measurable, ownership, or delivery evidence, (3) useful supporting responsibilities, then (4) lower-relevance general responsibilities. Do not reorder merely for stylistic variety.
+
+A reorder must be a pure permutation of every existing experience_bullet block in exactly one supplied experienceId. Use the supplied blockIds only. Include every bullet in that experience exactly once, do not change any bullet text as part of a reorder, and never include a heading, company, role, date, skills line, or a bullet from another experience. Do not reorder jobs or any content outside the bullets of one experience. If the current bullet order is already appropriate, return no reorder for that experience.
+
+SAFE EXPERIENCE-BULLET MERGING:
+Merging is lower priority than a high-value safe rewrite or a useful reorder. Use a merge only when two bullets in the same experience substantially overlap and combining them clearly reduces redundancy while improving relevance or clarity. Never merge unrelated bullets merely to save space.
+
+A merge must use exactly two supplied experience_bullet blockIds from one experienceId. The targetBlockId must be one of those sourceBlockIds and is the only bullet that survives. The merged text may use facts from those two source bullets only; it must preserve every material responsibility, scope, stakeholder, domain, technology, number, acronym, and leadership fact from both. Never infer facts from another bullet, another experience, or the job description. Do not merge a header, company, role, date, or skills line. If any material evidence would be lost, return no merge.
 
 For every proposed edit:
 - verify that the change is supported by the original resume
@@ -126,7 +153,39 @@ The JD describes what the employer wants.
 The resume describes what the candidate has actually done.
 Never use information from the JD as evidence about the candidate.`
 
+const masterEvidenceInstruction = `
+MASTER EXPERIENCE BOUNDARY:
+TEMPLATE RESUME = source of truth for structure, chronology, and the final document.
+MATCHED MASTER EXPERIENCE = additional factual evidence only for its explicitly paired Template experience.
+- You may use facts from a MATCHED MASTER EXPERIENCE only to improve wording in its corresponding TEMPLATE EXPERIENCE.
+- Never use Master facts from another experience, employer, title, or date range.
+- If a Template experience has no supplied matched Master experience, use only that Template experience as factual evidence.
+- Master evidence expands factual support; it never permits changing the Template's structure, employer, title, dates, or bullet count.
+- Do not invent facts absent from both the Template experience and its matched Master evidence.
+- When an edit or merge uses any fact not already in its Template source block(s), include every supporting Master block ID in sourceMasterBlockIds.
+- For an edit or merge, the cited Master block IDs must belong to the same matched experience. Never cite a Master block from another experience.
+
+MASTER MERGE OVERRIDE:
+For an explicitly cited matched Master experience only, a merge may use facts from its two Template source bullets plus those cited Master blocks. Preserve every material fact from the Template source bullets and never infer facts from the JD or another experience.`
+
 export function buildTailoringUserPrompt(input: TailoringPromptInput) {
-  if (input.editableSlots) return `${tailoringSystemInstruction}\n\nUse different rules by line type. For a Skills, Technologies, or Tools line: only reorder the existing items; never rewrite, add, or remove an item. The reordered Skills line may be the same length as its original. For an experience bullet or accomplishment: rewrite only as one shorter, factually equivalent sentence. Keep every number, percentage, date, acronym, product/platform name, employer name, and outcome exactly intact. Do not combine or split bullets, or change action-verb tense.\n\nThe original Word document has locked formatting and must stay within its original two-page limit. Return only JSON in this exact shape: {"analysis":{"matched":[{"requirement":"...","evidenceBlockIds":["paragraph_4"]}],"understated":[{"requirement":"...","evidenceBlockIds":["paragraph_7"]}],"missing":[{"requirement":"..."}]},"edits":[{"blockId":"paragraph_12","text":"Improved text"}]}. Return at most 8 edits. Each edit must use only a blockId supplied in RESUME BLOCKS. Never invent a blockId, use an array position or numeric index as an identifier, or return an edit for a non-editable block. Skill-line edits may be the same length; every other edit must be strictly shorter than its original. Do not add headings, bullets, contact information, new lines, commentary, or unchanged slots.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\nRESUME BLOCKS:\n${JSON.stringify(input.editableSlots)}\n\nSOURCE RESUME:\n${input.resumeText.slice(0, 18000)}`
+  if (input.editableSlots) {
+    const matchedMasterExperiences = Object.values(input.masterEvidence?.byTemplateExperience ?? {}).map((experience) => ({
+      templateExperienceId: experience.templateExperienceId,
+      masterExperienceId: experience.masterExperienceId,
+      confidence: experience.confidence,
+      blocks: experience.blocks.map((block) => ({ blockId: block.blockId, text: block.text })),
+    }))
+    const hasMasterEvidence = matchedMasterExperiences.length > 0
+    const masterSection = hasMasterEvidence
+      ? `\n\nMATCHED MASTER EXPERIENCE EVIDENCE:\n${JSON.stringify(matchedMasterExperiences)}`
+      : ''
+    const responseShape = hasMasterEvidence
+      ? '{"analysis":{"matched":[{"requirement":"...","evidenceBlockIds":["paragraph_4"],"masterBlockIds":["master_experience_0_block_0"]}],"understated":[{"requirement":"...","evidenceBlockIds":["paragraph_7"],"masterBlockIds":["master_experience_0_block_1"]}],"missing":[{"requirement":"..."}]},"edits":[{"blockId":"paragraph_12","text":"Improved text","sourceMasterBlockIds":["master_experience_0_block_1"]}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_15","paragraph_13","paragraph_14"]}],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_12","paragraph_13"],"targetBlockId":"paragraph_12","text":"Merged text","sourceMasterBlockIds":["master_experience_0_block_0"]}]}'
+      : '{"analysis":{"matched":[{"requirement":"...","evidenceBlockIds":["paragraph_4"]}],"understated":[{"requirement":"...","evidenceBlockIds":["paragraph_7"]}],"missing":[{"requirement":"..."}]},"edits":[{"blockId":"paragraph_12","text":"Improved text"}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_15","paragraph_13","paragraph_14"]}],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_12","paragraph_13"],"targetBlockId":"paragraph_12","text":"Merged text"}]}'
+    const responseInstructions = hasMasterEvidence ? ' Omit masterBlockIds and sourceMasterBlockIds when no Master fact is used.' : ''
+    const labels = hasMasterEvidence ? ['TEMPLATE RESUME BLOCKS', 'SOURCE TEMPLATE RESUME'] : ['RESUME BLOCKS', 'SOURCE RESUME']
+    return `${tailoringSystemInstruction}${hasMasterEvidence ? `\n\n${masterEvidenceInstruction}` : ''}\n\nUse different rules by line type. For a Skills, Technologies, or Tools line: only reorder the existing items; never rewrite, add, or remove an item. The reordered Skills line may be the same length as its original. For an experience bullet or accomplishment: keep the rewrite concise; similar length is acceptable. Preserve all material responsibilities, scope, stakeholders, domain terms, numbers, and factual claims. Do not shorten merely for the sake of shortening. Do not combine or split bullets except through a valid merge, or change action-verb tense.\n\nThe original Word document has locked formatting and must stay within its original two-page limit. Return only JSON in this exact shape: ${responseShape}.${responseInstructions} Return at most 8 edits. Each edit must use only a blockId supplied in RESUME BLOCKS. Never invent a blockId, use an array position or numeric index as an identifier, or return an edit for a non-editable block. For each reorder, use only experience_bullet blockIds from one supplied experienceId and include every bullet in that experience exactly once; otherwise return no reorder. For each merge, use exactly two experience_bullet sourceBlockIds from one supplied experienceId, keep the targetBlockId as one sourceBlockId, and preserve every supported fact from both sources. Skill-line edits may be the same length; experience edits must preserve material factual content. Do not add headings, bullets, contact information, new lines, commentary, or unchanged slots.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\n${labels[0]}:\n${JSON.stringify(input.editableSlots)}${masterSection}\n\n${labels[1]}:\n${input.resumeText.slice(0, 18000)}`
+  }
   return `${tailoringSystemInstruction}\n\nReturn only a polished plain-text resume with clear headings and bullets; no commentary or markdown fences.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\nSOURCE RESUME:\n${input.resumeText.slice(0, 18000)}`
 }

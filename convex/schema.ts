@@ -14,6 +14,8 @@ export default defineSchema({
     extractedText: v.optional(v.string()),
     detectedSkills: v.optional(v.array(v.string())),
     contentHash: v.optional(v.string()),
+    purpose: v.optional(v.union(v.literal("template"), v.literal("master"))),
+    isActiveMaster: v.optional(v.boolean()),
     uploadedAt: v.number(),
   }).index("by_owner", ["ownerId"]),
   resumeProfiles: defineTable({
@@ -29,6 +31,37 @@ export default defineSchema({
   })
     .index("by_owner_hash_version", ["ownerId", "sourceHash", "schemaVersion"])
     .index("by_owner", ["ownerId"]),
+  masterResumeStructures: defineTable({
+    ownerId: v.string(),
+    sourceResumeId: v.id("resumes"),
+    sourceHash: v.string(),
+    schemaVersion: v.number(),
+    structure: v.object({
+      resumeId: v.id("resumes"),
+      experiences: v.array(v.object({
+        experienceId: v.string(),
+        order: v.number(),
+        headerText: v.string(),
+        company: v.optional(v.string()),
+        title: v.optional(v.string()),
+        dateText: v.optional(v.string()),
+        blocks: v.array(v.object({
+          blockId: v.string(),
+          text: v.string(),
+          kind: v.union(v.literal("experience_header"), v.literal("experience_bullet"), v.literal("other")),
+        })),
+      })),
+      ungroupedBlocks: v.array(v.object({
+        blockId: v.string(),
+        text: v.string(),
+        kind: v.union(v.literal("experience_header"), v.literal("experience_bullet"), v.literal("other")),
+      })),
+    }),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner_hash_version", ["ownerId", "sourceHash", "schemaVersion"])
+    .index("by_owner_resume", ["ownerId", "sourceResumeId"]),
   resumeJobMatches: defineTable({
     ownerId: v.string(),
     sourceHash: v.string(),

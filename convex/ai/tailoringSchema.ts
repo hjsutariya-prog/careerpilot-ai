@@ -1,16 +1,34 @@
 export type TailoringEdit = {
   blockId: string
   text: string
+  /** Required when the edit relies on facts outside the Template experience. */
+  sourceMasterBlockIds?: string[]
+}
+
+export type TailoringReorder = {
+  experienceId: string
+  blockIds: string[]
+}
+
+export type TailoringMerge = {
+  experienceId: string
+  sourceBlockIds: [string, string]
+  targetBlockId: string
+  text: string
+  /** Optional proof from the Master experience matched to this Template experience. */
+  sourceMasterBlockIds?: string[]
 }
 
 export type MatchedRequirement = {
   requirement: string
   evidenceBlockIds: string[]
+  masterBlockIds?: string[]
 }
 
 export type UnderstatedRequirement = {
   requirement: string
   evidenceBlockIds: string[]
+  masterBlockIds?: string[]
 }
 
 export type MissingRequirement = {
@@ -35,6 +53,8 @@ export type LegacyIndexedTailoringResponse = {
 export type TailoringResponse = {
   analysis: TailoringAnalysis
   edits: TailoringEdit[]
+  reorders?: TailoringReorder[]
+  merges?: TailoringMerge[]
 }
 
 // This flag is parser metadata only. It lets validation preserve safe
@@ -57,7 +77,7 @@ export const tailoringResponseSchema = {
           type: 'array',
           items: {
             type: 'object',
-            properties: { requirement: { type: 'string' }, evidenceBlockIds: { type: 'array', items: { type: 'string' } } },
+        properties: { requirement: { type: 'string' }, evidenceBlockIds: { type: 'array', items: { type: 'string' } }, masterBlockIds: { type: 'array', items: { type: 'string' } } },
             required: ['requirement', 'evidenceBlockIds'],
             additionalProperties: false,
           },
@@ -66,7 +86,7 @@ export const tailoringResponseSchema = {
           type: 'array',
           items: {
             type: 'object',
-            properties: { requirement: { type: 'string' }, evidenceBlockIds: { type: 'array', items: { type: 'string' } } },
+        properties: { requirement: { type: 'string' }, evidenceBlockIds: { type: 'array', items: { type: 'string' } }, masterBlockIds: { type: 'array', items: { type: 'string' } } },
             required: ['requirement', 'evidenceBlockIds'],
             additionalProperties: false,
           },
@@ -88,8 +108,35 @@ export const tailoringResponseSchema = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { blockId: { type: 'string' }, text: { type: 'string' } },
+        properties: { blockId: { type: 'string' }, text: { type: 'string' }, sourceMasterBlockIds: { type: 'array', items: { type: 'string' } } },
         required: ['blockId', 'text'],
+        additionalProperties: false,
+      },
+    },
+    reorders: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          experienceId: { type: 'string' },
+          blockIds: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['experienceId', 'blockIds'],
+        additionalProperties: false,
+      },
+    },
+    merges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          experienceId: { type: 'string' },
+          sourceBlockIds: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 2 },
+          targetBlockId: { type: 'string' },
+          text: { type: 'string' },
+          sourceMasterBlockIds: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['experienceId', 'sourceBlockIds', 'targetBlockId', 'text'],
         additionalProperties: false,
       },
     },
@@ -118,6 +165,25 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isTailoringEdit(value: unknown): value is TailoringEdit {
   return isRecord(value) && typeof value.blockId === 'string' && typeof value.text === 'string'
+    && (value.sourceMasterBlockIds === undefined || (Array.isArray(value.sourceMasterBlockIds) && value.sourceMasterBlockIds.every((blockId) => typeof blockId === 'string')))
+}
+
+function isTailoringReorder(value: unknown): value is TailoringReorder {
+  return isRecord(value)
+    && typeof value.experienceId === 'string'
+    && Array.isArray(value.blockIds)
+    && value.blockIds.every((blockId) => typeof blockId === 'string')
+}
+
+function isTailoringMerge(value: unknown): value is TailoringMerge {
+  return isRecord(value)
+    && typeof value.experienceId === 'string'
+    && Array.isArray(value.sourceBlockIds)
+    && value.sourceBlockIds.length === 2
+    && value.sourceBlockIds.every((blockId) => typeof blockId === 'string')
+    && typeof value.targetBlockId === 'string'
+    && typeof value.text === 'string'
+    && (value.sourceMasterBlockIds === undefined || (Array.isArray(value.sourceMasterBlockIds) && value.sourceMasterBlockIds.every((blockId) => typeof blockId === 'string')))
 }
 
 function isEvidenceRequirement(value: unknown): value is MatchedRequirement | UnderstatedRequirement {
@@ -125,6 +191,7 @@ function isEvidenceRequirement(value: unknown): value is MatchedRequirement | Un
     && typeof value.requirement === 'string'
     && Array.isArray(value.evidenceBlockIds)
     && value.evidenceBlockIds.every((blockId) => typeof blockId === 'string')
+    && (value.masterBlockIds === undefined || (Array.isArray(value.masterBlockIds) && value.masterBlockIds.every((blockId) => typeof blockId === 'string')))
 }
 
 function isMissingRequirement(value: unknown): value is MissingRequirement {
@@ -148,16 +215,22 @@ function isLegacyIndexedTailoringEdit(value: unknown): value is LegacyIndexedTai
 export function parseTailoringResponse(raw: string): ParsedTailoringResponse | null {
   const candidate = jsonCandidate(raw)
   if (!isRecord(candidate) || !Array.isArray(candidate.edits) || !candidate.edits.every(isTailoringEdit)) return null
+  if (candidate.reorders !== undefined && (!Array.isArray(candidate.reorders) || !candidate.reorders.every(isTailoringReorder))) return null
+  if (candidate.merges !== undefined && (!Array.isArray(candidate.merges) || !candidate.merges.every(isTailoringMerge))) return null
+  const reorders = candidate.reorders as TailoringReorder[] | undefined
+  const merges = candidate.merges as TailoringMerge[] | undefined
   const analysisProvided = candidate.analysis !== undefined
   if (analysisProvided && !isTailoringAnalysis(candidate.analysis)) return null
   const analysis = isTailoringAnalysis(candidate.analysis) ? candidate.analysis : emptyTailoringAnalysis()
   return {
     analysis: {
-      matched: analysis.matched.map((item) => ({ requirement: item.requirement, evidenceBlockIds: [...item.evidenceBlockIds] })),
-      understated: analysis.understated.map((item) => ({ requirement: item.requirement, evidenceBlockIds: [...item.evidenceBlockIds] })),
+      matched: analysis.matched.map((item) => ({ requirement: item.requirement, evidenceBlockIds: [...item.evidenceBlockIds], ...(item.masterBlockIds ? { masterBlockIds: [...item.masterBlockIds] } : {}) })),
+      understated: analysis.understated.map((item) => ({ requirement: item.requirement, evidenceBlockIds: [...item.evidenceBlockIds], ...(item.masterBlockIds ? { masterBlockIds: [...item.masterBlockIds] } : {}) })),
       missing: analysis.missing.map((item) => ({ requirement: item.requirement })),
     },
-    edits: candidate.edits.map((edit) => ({ blockId: edit.blockId, text: edit.text })),
+    edits: candidate.edits.map((edit) => ({ blockId: edit.blockId, text: edit.text, ...(edit.sourceMasterBlockIds ? { sourceMasterBlockIds: [...edit.sourceMasterBlockIds] } : {}) })),
+    ...(reorders ? { reorders: reorders.map((reorder) => ({ experienceId: reorder.experienceId, blockIds: [...reorder.blockIds] })) } : {}),
+    ...(merges ? { merges: merges.map((merge) => ({ experienceId: merge.experienceId, sourceBlockIds: [merge.sourceBlockIds[0], merge.sourceBlockIds[1]], targetBlockId: merge.targetBlockId, text: merge.text, ...(merge.sourceMasterBlockIds ? { sourceMasterBlockIds: [...merge.sourceMasterBlockIds] } : {}) })) } : {}),
     analysisProvided,
   }
 }

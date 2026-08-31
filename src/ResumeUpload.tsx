@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react'
+import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -7,6 +7,8 @@ import { sha256Text } from './resumeFingerprint'
 
 const MAX_BYTES = 10 * 1024 * 1024
 const allowed = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
+type ResumePurpose = 'template' | 'master'
+type UploadedFile = { name: string; size: number }
 
 async function readableText(file: File) {
   if (file.type === 'application/pdf') {
@@ -28,18 +30,29 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
   const generateUploadUrl = useMutation(api.resumes.generateUploadUrl)
   const saveResume = useMutation(api.resumes.save)
   const removeResume = useMutation(api.resumes.removeMine)
+  const removeMasterResume = useMutation(api.resumes.removeActiveMaster)
+  const rebuildMasterStructure = useMutation(api.masterResumeStructure.rebuildMine)
   const savedResume = useQuery(api.resumes.mine)
+  const savedMasterResume = useQuery(api.resumes.activeMaster)
   const [message, setMessage] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [uploadedFile, setUploadedFile] = useState<{ name: string; size: number } | null>(null)
+  const [masterMessage, setMasterMessage] = useState('')
+  const [busyPurpose, setBusyPurpose] = useState<ResumePurpose | null>(null)
+  const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null)
+  const [uploadedMasterFile, setUploadedMasterFile] = useState<UploadedFile | null>(null)
 
-  const upload = async (event: ChangeEvent<HTMLInputElement>) => {
+  useEffect(() => {
+    if (!savedMasterResume?._id) return
+    void rebuildMasterStructure().catch(() => undefined)
+  }, [rebuildMasterStructure, savedMasterResume?._id])
+
+  const upload = async (event: ChangeEvent<HTMLInputElement>, purpose: ResumePurpose) => {
     const file = event.target.files?.[0]
     if (!file) return
-    if (!allowed.has(file.type)) return setMessage('Upload a PDF or DOCX file only.')
-    if (file.size === 0) return setMessage('This file is empty. Choose a resume with content.')
-    if (file.size > MAX_BYTES) return setMessage('This file is larger than 10 MB. Choose a smaller resume.')
-    setBusy(true); setMessage('Checking that we can read your resume…')
+    const setStatus = purpose === 'master' ? setMasterMessage : setMessage
+    if (!allowed.has(file.type)) return setStatus('Upload a PDF or DOCX file only.')
+    if (file.size === 0) return setStatus('This file is empty. Choose a resume with content.')
+    if (file.size > MAX_BYTES) return setStatus('This file is larger than 10 MB. Choose a smaller resume.')
+    setBusyPurpose(purpose); setStatus('Checking that we can read your resume…')
     try {
       const text = await readableText(file)
       if (text.length < 40) throw new Error('Your resume has no readable text. Export it again as a text-based PDF or DOCX.')
@@ -49,15 +62,20 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
       const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': file.type }, body: file })
       if (!response.ok) throw new Error('We could not upload that file. Please try again.')
       const { storageId } = await response.json() as { storageId: string }
-      await saveResume({ storageId: storageId as never, fileName: file.name, mimeType: file.type, sizeBytes: file.size, extractedTextLength: text.length, extractedText: text.slice(0, 60_000), detectedSkills, contentHash })
-      setUploadedFile({ name: file.name, size: file.size })
-      setMessage('Resume saved privately. Now set the details for your daily brief.')
-    } catch (error) { setMessage(error instanceof Error ? error.message : 'We could not read that file. Try another PDF or DOCX.') }
-    finally { setBusy(false) }
+      await saveResume({ storageId: storageId as never, fileName: file.name, mimeType: file.type, sizeBytes: file.size, extractedTextLength: text.length, extractedText: text.slice(0, 60_000), detectedSkills, contentHash, purpose })
+      if (purpose === 'master') {
+        setUploadedMasterFile({ name: file.name, size: file.size })
+        setStatus('Master Resume saved privately. It is ready for future tailoring.')
+      } else {
+        setUploadedFile({ name: file.name, size: file.size })
+        setStatus('Resume saved privately. Now set the details for your daily brief.')
+      }
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'We could not read that file. Try another PDF or DOCX.') }
+    finally { setBusyPurpose(null) }
   }
 
   const remove = async () => {
-    setBusy(true)
+    setBusyPurpose('template')
     setMessage('')
     try {
       await removeResume()
@@ -66,12 +84,29 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
     } catch {
       setMessage('We could not remove your resume. Please try again.')
     } finally {
-      setBusy(false)
+      setBusyPurpose(null)
+    }
+  }
+
+  const removeMaster = async () => {
+    setBusyPurpose('master')
+    setMasterMessage('')
+    try {
+      await removeMasterResume()
+      setUploadedMasterFile(null)
+      setMasterMessage('Master Resume removed. Your normal resume remains unchanged.')
+    } catch {
+      setMasterMessage('We could not remove your Master Resume. Please try again.')
+    } finally {
+      setBusyPurpose(null)
     }
   }
 
   const displayFile = uploadedFile ?? (savedResume ? { name: savedResume.fileName, size: savedResume.sizeBytes } : null)
+  const displayMasterFile = uploadedMasterFile ?? (savedMasterResume ? { name: savedMasterResume.fileName, size: savedMasterResume.sizeBytes } : null)
   const success = Boolean(displayFile)
+  const templateBusy = busyPurpose === 'template'
+  const masterBusy = busyPurpose === 'master'
 
   return <main className={embedded ? 'resume-shell dashboard-resume-shell' : 'resume-shell'}>
     {!embedded && <header className="preference-topbar resume-topbar">
@@ -82,24 +117,47 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
       <h1>Bring your experience.<br /><em>We’ll carry the rest.</em></h1>
       <p>Your resume helps us find jobs that fit you.</p>
       {!displayFile ? <label className="resume-drop">
-        <input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busy} onChange={upload} type="file" />
+        <input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'template')} type="file" />
         <span className="resume-mark" aria-hidden="true">↥</span>
-        <strong>{busy ? 'Reading your resume…' : 'Upload your resume'}</strong>
+        <strong>{templateBusy ? 'Reading your resume…' : 'Upload your resume'}</strong>
         <small>PDF or DOCX · Up to 10 MB · Text must be readable</small>
-        <span className="resume-upload-cta">{busy ? 'Uploading…' : 'Choose file'}</span>
+        <span className="resume-upload-cta">{templateBusy ? 'Uploading…' : 'Choose file'}</span>
       </label> : <section className="resume-saved" aria-label="Saved resume">
         <div className="saved-file-heading"><span className="resume-mark" aria-hidden="true">✓</span><div><strong>Resume added</strong><small>Saved privately to this account</small></div></div>
         <div className="saved-file-name">
           <span className="file-badge">{displayFile.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOCX'}</span>
           <div className="saved-file-details"><strong>{displayFile.name}</strong><small>{Math.max(1, Math.round(displayFile.size / 1024))} KB</small></div>
           <div className="file-icon-actions">
-            <label className="file-icon-action replace" title="Choose a different file"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Choose a different resume file" disabled={busy} onChange={upload} type="file" /><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></label>
-            <button aria-label="Remove resume" className="file-icon-action remove" disabled={busy} onClick={() => void remove()} title="Remove resume" type="button"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m-9 0 1 13h10l1-13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></button>
+            <label className="file-icon-action replace" title="Choose a different file"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Choose a different resume file" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'template')} type="file" /><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></label>
+            <button aria-label="Remove resume" className="file-icon-action remove" disabled={busyPurpose !== null} onClick={() => void remove()} title="Remove resume" type="button"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m-9 0 1 13h10l1-13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></button>
           </div>
         </div>
       </section>}
       {message && <p className={message.startsWith('Resume saved') || message.startsWith('Resume removed') ? 'form-success' : 'field-error'} role="status">{message}</p>}
       {success && <button className="save-preferences" onClick={onContinue} type="button">Set job preferences <span>→</span></button>}
+      <section className="master-resume-panel" aria-labelledby="master-resume-heading">
+        <h2 id="master-resume-heading">Master Resume (Optional)</h2>
+        <p>Upload your complete career history to give future tailoring more factual evidence.</p>
+        <p>If you don't upload one, we'll continue using your selected resume as the source of truth.</p>
+        {!displayMasterFile ? <label className="resume-drop master-resume-drop">
+          <input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'master')} type="file" />
+          <span className="resume-mark" aria-hidden="true">↥</span>
+          <strong>{masterBusy ? 'Reading your Master Resume…' : 'Upload your Master Resume'}</strong>
+          <small>PDF or DOCX · Up to 10 MB · Text must be readable</small>
+          <span className="resume-upload-cta">{masterBusy ? 'Uploading…' : 'Choose file'}</span>
+        </label> : <section className="resume-saved master-resume-saved" aria-label="Saved Master Resume">
+          <div className="saved-file-heading"><span className="resume-mark" aria-hidden="true">✓</span><div><strong>Active Master Resume</strong><small>Saved privately to this account</small></div></div>
+          <div className="saved-file-name">
+            <span className="file-badge">{displayMasterFile.name.toLowerCase().endsWith('.pdf') ? 'PDF' : 'DOCX'}</span>
+            <div className="saved-file-details"><strong>{displayMasterFile.name}</strong><small>{Math.max(1, Math.round(displayMasterFile.size / 1024))} KB{savedMasterResume ? ` · Uploaded ${new Date(savedMasterResume.uploadedAt).toLocaleDateString()}` : ''}</small></div>
+            <div className="file-icon-actions">
+              <label className="file-icon-action replace" title="Replace Master Resume"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Replace Master Resume" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'master')} type="file" /><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M12 16V4m0 0L7 9m5-5 5 5M5 20h14" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></label>
+              <button aria-label="Remove Master Resume" className="file-icon-action remove" disabled={busyPurpose !== null} onClick={() => void removeMaster()} title="Remove Master Resume" type="button"><svg aria-hidden="true" fill="none" viewBox="0 0 24 24"><path d="M4 7h16m-10 4v5m4-5v5M9 7l1-3h4l1 3m-9 0 1 13h10l1-13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg></button>
+            </div>
+          </div>
+        </section>}
+        {masterMessage && <p className={masterMessage.startsWith('Master Resume saved') || masterMessage.startsWith('Master Resume removed') ? 'form-success' : 'field-error'} role="status">{masterMessage}</p>}
+      </section>
     </section>
   </main>
 }

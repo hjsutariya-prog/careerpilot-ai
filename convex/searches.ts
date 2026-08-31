@@ -24,6 +24,7 @@ export function dedupeSuggestionInputs<T extends SuggestionInput>(suggestions: r
 }
 
 import { requireOwner } from "./owner";
+import { selectLatestTemplateResume } from "./resumeRecords";
 
 const suggestionValidator = v.object({
   jobId: v.id("jobs"),
@@ -121,7 +122,8 @@ export const ensureFirstSearch = internalMutation({
   args: { ownerId: v.string() },
   handler: async (ctx, args) => {
     const preferences = await ctx.db.query("preferences").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).first();
-    const resume = await ctx.db.query("resumes").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).order("desc").first();
+    const resumes = await ctx.db.query("resumes").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).order("desc").collect();
+    const resume = selectLatestTemplateResume(resumes);
     if (!preferences) return { firstQueued: false, reason: "preferences-missing" };
     if (resume?.extractedText) await ctx.scheduler.runAfter(0, internal.resumeProfiles.ensureForResume, { resumeId: resume._id });
 
@@ -266,7 +268,7 @@ export const runSearch = internalAction({
     const freshness = await ctx.runQuery(internal.searches.inventoryFreshness, {});
     let failedSourceTokens: string[] = [];
     if (Date.now() - freshness.latestSuccessfulRefreshAt > 15 * 60 * 1000) {
-      const outcomes = await ctx.runAction(internal.greenhouse.refreshInventory, { reason: searchRun.kind === "first" ? "first-search" : "daily" });
+      const outcomes = await ctx.runAction(internal.greenhouse.refreshInventory, { reason: searchRun.kind === "first" ? "first-search" : "daily" }) as Array<{ status: string; sourceToken: string }>;
       failedSourceTokens = outcomes.filter((outcome) => outcome.status === "failed").map((outcome) => outcome.sourceToken);
       if (failedSourceTokens.length === outcomes.length) {
         await ctx.runMutation(internal.searches.failSearch, { searchRunId: args.searchRunId, error: "We could not reach any approved Greenhouse source. Please try again later." });
@@ -275,7 +277,7 @@ export const runSearch = internalAction({
     }
 
     await ctx.runMutation(internal.searches.setSearchStatus, { searchRunId: args.searchRunId, status: "matching" });
-    const jobs = await ctx.runQuery(internal.searches.activeJobsForMatching, {});
+    const jobs = await ctx.runQuery(internal.searches.activeJobsForMatching, {}) as Array<{ _id: Id<"jobs">; title: string; companyName: string; cities: string[]; locationLabel: string; skills: string[]; description: string; lastUpdatedAt: number }>;
     const jobsById = new Map(jobs.map((job) => [String(job._id), job._id]));
     const suggestions = getLiveSuggestions(preferences, jobs.map((job) => ({ id: String(job._id), title: job.title, companyName: job.companyName, cities: job.cities, locationLabel: job.locationLabel, skills: job.skills, description: job.description, lastUpdatedAt: job.lastUpdatedAt })));
     const sourceWarning = failedSourceTokens.length > 0 ? `${failedSourceTokens.length} approved Greenhouse source${failedSourceTokens.length === 1 ? " was" : "s were"} unavailable for this search.` : undefined;

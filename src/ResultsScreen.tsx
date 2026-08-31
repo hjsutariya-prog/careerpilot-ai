@@ -105,7 +105,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
         setTailorMessage({ tone: 'error', text: 'We could not make safe changes to this resume. No credits were used.' })
         return
       }
-      const tailoredDocx = await patchDocxTemplate(source, slots, result.replacements)
+      const tailoredDocx = await patchDocxTemplate(source, slots, result.replacements, result.reorders, result.merges)
       if (resumeFormat === 'pdf') {
         if (!result.reservationId) throw new Error('A PDF requires a successful AI tailoring request.')
         setTailorMessage({ tone: 'status', text: 'Converting your tailored DOCX to PDF…' })

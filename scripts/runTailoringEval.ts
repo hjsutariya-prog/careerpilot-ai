@@ -1,6 +1,6 @@
-import { parseTailoringEvalRuns, runTailoringEval } from './tailoringEvalRunner'
+import { parseTailoringEvalOptions, runTailoringEval } from './tailoringEvalRunner'
 
-runTailoringEval({ runs: parseTailoringEvalRuns() }).catch((error) => {
+runTailoringEval(parseTailoringEvalOptions()).catch((error) => {
   console.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 })

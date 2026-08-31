@@ -1,5 +1,6 @@
 import type { MatchedRequirement, TailoringAnalysis, TailoringEdit, TailoringResponse, UnderstatedRequirement } from './tailoringSchema'
 import type { ResumeBlock } from './resumeBlocks'
+import { masterBackedRewriteReason, matchedMasterEvidenceForTemplate, needsMasterProvenance, resolveMasterSources, type TailoringMasterEvidence } from './tailoringMasterProvenance'
 
 export type TailoringEditableSlot = ResumeBlock
 
@@ -8,6 +9,7 @@ export type TailoringValidationInput = {
   editableSlots: TailoringEditableSlot[]
   maxEdits?: number
   enforceUnderstatedEditLinks?: boolean
+  masterEvidence?: TailoringMasterEvidence
 }
 
 export type ValidatedTailoringEdit = TailoringEdit
@@ -22,7 +24,7 @@ export type RejectedTailoringEvidence = {
   classification: 'matched' | 'understated'
   requirement: string
   blockId: string
-  reason: 'unknown_evidence_block' | 'duplicate_evidence_block'
+  reason: 'unknown_evidence_block' | 'duplicate_evidence_block' | 'unknown_master_source_block' | 'master_source_cross_experience' | 'master_source_without_match'
 }
 
 export type RejectedTailoringRequirement = {
@@ -79,7 +81,7 @@ function namedTechnologiesIn(text: string) {
   return namedTechnologyAliases.flatMap((aliases, index) => hasNamedTechnologyAlias(text, aliases) ? [index] : [])
 }
 
-function introducesUnsupportedNamedTechnology(resumeEvidence: string, replacement: string) {
+export function introducesUnsupportedNamedTechnology(resumeEvidence: string, replacement: string) {
   const evidenceTechnologies = new Set(namedTechnologiesIn(resumeEvidence))
   return namedTechnologiesIn(replacement).some((technology) => !evidenceTechnologies.has(technology))
 }
@@ -183,6 +185,10 @@ function removedMaterialConcepts(source: string, replacement: string) {
   return materialConceptsIn(source).filter((concept) => !equivalentMaterialPhrases(concept).some((variant) => includesMaterialPhrase(replacement, variant)))
 }
 
+export function preservesMaterialContent(source: string, replacement: string) {
+  return removedMaterialConcepts(source, replacement).length === 0
+}
+
 function isWithinExperienceLengthLimit(source: string, replacement: string) {
   return replacement.length <= Math.ceil(source.length * 1.1)
     && wordCount(replacement) <= Math.ceil(wordCount(source) * 1.1)
@@ -200,7 +206,7 @@ export function isSafeExperienceRewrite(source: string, replacement: string) {
     && sourceAcronyms.every((acronym) => replacementAcronyms.includes(acronym))
     && replacementAcronyms.every((acronym) => sourceAcronyms.includes(acronym))
     && replacement.split(/[.!?]/).filter(Boolean).length <= source.split(/[.!?]/).filter(Boolean).length
-    && removedMaterialConcepts(source, replacement).length === 0
+    && preservesMaterialContent(source, replacement)
 }
 
 function rejectionReason(source: string, replacement: string) {
@@ -215,7 +221,7 @@ function rejectionReason(source: string, replacement: string) {
   const replacementAcronyms = acronymsIn(replacement)
   if (!sourceAcronyms.every((acronym) => replacementAcronyms.includes(acronym)) || !replacementAcronyms.every((acronym) => sourceAcronyms.includes(acronym))) return 'changed_acronym'
   if (replacement.split(/[.!?]/).filter(Boolean).length > source.split(/[.!?]/).filter(Boolean).length) return 'expanded_sentence_count'
-  if (removedMaterialConcepts(source, replacement).length > 0) return 'material_content_removed'
+  if (!preservesMaterialContent(source, replacement)) return 'material_content_removed'
   return 'unsafe_rewrite'
 }
 
@@ -242,7 +248,7 @@ function hasRelevantSkillEvidence(blockId: string, source: string, requirements:
   return requirements.some((item) => item.evidenceBlockIds.includes(blockId) && skills.some((skill) => requirementMentionsSkill(item.requirement, skill)))
 }
 
-function validateAnalysis(analysis: TailoringAnalysis, blocksById: Map<string, TailoringEditableSlot>) {
+function validateAnalysis(analysis: TailoringAnalysis, blocksById: Map<string, TailoringEditableSlot>, masterEvidence?: TailoringMasterEvidence) {
   const rejectedEvidence: RejectedTailoringEvidence[] = []
   const rejectedRequirements: RejectedTailoringRequirement[] = []
   const categoriesByRequirement = new Map<string, Set<RequirementClassification>>()
@@ -295,7 +301,26 @@ function validateAnalysis(analysis: TailoringAnalysis, blocksById: Map<string, T
       rejectRequirement(classification, item.requirement, 'empty_evidence_block_ids')
       return []
     }
-    return [{ requirement: item.requirement.trim(), evidenceBlockIds }]
+    const seenMasterBlockIds = new Set<string>()
+    const masterBlockIds = (item.masterBlockIds ?? []).flatMap((masterBlockId) => {
+      if (seenMasterBlockIds.has(masterBlockId)) {
+        rejectedEvidence.push({ classification, requirement: item.requirement.trim(), blockId: masterBlockId, reason: 'duplicate_evidence_block' })
+        return []
+      }
+      seenMasterBlockIds.add(masterBlockId)
+      const hasAllowedMatch = evidenceBlockIds.some((templateBlockId) => {
+        const templateBlock = blocksById.get(templateBlockId)
+        const matchedMaster = matchedMasterEvidenceForTemplate(masterEvidence, templateBlock?.experienceId)
+        return matchedMaster?.blocks.some((block) => block.blockId === masterBlockId)
+      })
+      if (hasAllowedMatch) return [masterBlockId]
+      const reason = masterEvidence?.masterBlockExperienceIds[masterBlockId]
+        ? 'master_source_cross_experience'
+        : masterEvidence ? 'unknown_master_source_block' : 'master_source_without_match'
+      rejectedEvidence.push({ classification, requirement: item.requirement.trim(), blockId: masterBlockId, reason })
+      return []
+    })
+    return [{ requirement: item.requirement.trim(), evidenceBlockIds, ...(masterBlockIds.length ? { masterBlockIds } : {}) }]
   })
   const validateMissing = () => analysis.missing.flatMap((item) => {
     if (isInvalidRequirement('missing', item.requirement)) return []
@@ -320,8 +345,7 @@ function validateAnalysis(analysis: TailoringAnalysis, blocksById: Map<string, T
 export function validateTailoringResponse(input: TailoringValidationInput): TailoringValidationResult {
   const edits = input.response.edits.slice(0, input.maxEdits ?? 8)
   const blocksById = new Map(input.editableSlots.map((block) => [block.blockId, block]))
-  const resumeEvidence = input.editableSlots.map((block) => block.text).join('\n')
-  const analysisValidation = validateAnalysis(input.response.analysis, blocksById)
+  const analysisValidation = validateAnalysis(input.response.analysis, blocksById, input.masterEvidence)
   const understatedEvidenceBlockIds = new Set(analysisValidation.analysis.understated.flatMap((item) => item.evidenceBlockIds))
   const seenBlockIds = new Set<string>()
   const acceptedEdits: ValidatedTailoringEdit[] = []
@@ -347,6 +371,16 @@ export function validateTailoringResponse(input: TailoringValidationInput): Tail
       rejectedEdits.push({ blockId: edit.blockId, text, reason: 'protected_slot' })
       continue
     }
+    const resolvedMasterSources = resolveMasterSources({ templateBlock: slot, sourceMasterBlockIds: edit.sourceMasterBlockIds, masterEvidence: input.masterEvidence })
+    if (!resolvedMasterSources.ok) {
+      rejectedEdits.push({ blockId: edit.blockId, text, reason: resolvedMasterSources.reason })
+      continue
+    }
+    const matchedMasterEvidence = matchedMasterEvidenceForTemplate(input.masterEvidence, slot.experienceId)
+    if (!edit.sourceMasterBlockIds?.length && matchedMasterEvidence && needsMasterProvenance(slot.text, text, matchedMasterEvidence.blocks)) {
+      rejectedEdits.push({ blockId: edit.blockId, text, reason: 'master_provenance_required' })
+      continue
+    }
     const exactSkillReorder = isSafeSkillReorder(slot.text, text)
     const hasUnderstatedEvidence = understatedEvidenceBlockIds.has(edit.blockId)
     const hasRelevantMatchedSkillEvidence = hasRelevantSkillEvidence(edit.blockId, slot.text, analysisValidation.analysis.matched)
@@ -356,7 +390,11 @@ export function validateTailoringResponse(input: TailoringValidationInput): Tail
       rejectedEdits.push({ blockId: edit.blockId, text, reason: 'edit_has_no_understated_evidence' })
       continue
     }
-    if (input.enforceUnderstatedEditLinks && introducesUnsupportedNamedTechnology(resumeEvidence, text)) {
+    const templateExperienceEvidence = slot.experienceId
+      ? input.editableSlots.filter((block) => block.experienceId === slot.experienceId).map((block) => block.text).join('\n')
+      : input.editableSlots.map((block) => block.text).join('\n')
+    const allowedEvidence = `${templateExperienceEvidence}\n${resolvedMasterSources.blocks.map((block) => block.text).join('\n')}`
+    if (input.enforceUnderstatedEditLinks && introducesUnsupportedNamedTechnology(allowedEvidence, text)) {
       rejectedEdits.push({ blockId: edit.blockId, text, reason: 'missing_named_requirement_introduced' })
       continue
     }
@@ -367,12 +405,15 @@ export function validateTailoringResponse(input: TailoringValidationInput): Tail
     }
     nonEmpty += 1
     if (isSkillSlot(slot.text) ? text.length <= slot.text.length : text.length < slot.text.length) withinLength += 1
-    if (isSafeTemplateReplacement(slot.text, text)) {
+    const safetyReason = resolvedMasterSources.blocks.length
+      ? masterBackedRewriteReason(slot.text, text, resolvedMasterSources.blocks)
+      : isSafeTemplateReplacement(slot.text, text) ? null : rejectionReason(slot.text, text)
+    if (!safetyReason) {
       safe += 1
-      acceptedEdits.push({ blockId: edit.blockId, text })
+      acceptedEdits.push({ blockId: edit.blockId, text, ...(edit.sourceMasterBlockIds?.length ? { sourceMasterBlockIds: [...edit.sourceMasterBlockIds] } : {}) })
       continue
     }
-    rejectedEdits.push({ blockId: edit.blockId, text, reason: rejectionReason(slot.text, text) })
+    rejectedEdits.push({ blockId: edit.blockId, text, reason: safetyReason })
   }
 
   return { acceptedEdits, rejectedEdits, analysis: analysisValidation.analysis, rejectedEvidence: analysisValidation.rejectedEvidence, rejectedRequirements: analysisValidation.rejectedRequirements, diagnostics: { proposed: edits.length, editable, nonEmpty, withinLength, safe } }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { tailoringEvalCases } from './tailoringEvalCases'
-import { evaluateTailoringResponse, requirementConceptMatches, summarizeTailoringEvaluation, summarizeTailoringEvalRuns, summarizeTailoringEvalSuite } from './tailoringEval'
+import { evaluateTailoringResponse, masterEvidenceForEvalCase, requirementConceptMatches, summarizeTailoringEvaluation, summarizeTailoringEvalRuns, summarizeTailoringEvalSuite } from './tailoringEval'
 
 const evalCase = (id: string) => {
   const found = tailoringEvalCases.find((item) => item.id === id)
@@ -24,8 +24,8 @@ describe('resume tailoring evaluation harness', () => {
     expect(requirementConceptMatches({ concept: 'Kubernetes' }, 'Container orchestration')).toBe(false)
   })
 
-  it('defines 30 synthetic cases across all evaluation categories', () => {
-    expect(tailoringEvalCases).toHaveLength(30)
+  it('defines 36 synthetic cases across all evaluation categories', () => {
+    expect(tailoringEvalCases).toHaveLength(36)
     expect(new Set(tailoringEvalCases.map((item) => item.category))).toEqual(new Set([
       'Backend',
       'Frontend',
@@ -35,6 +35,66 @@ describe('resume tailoring evaluation harness', () => {
       'DevOps',
       'Safety/edge cases',
     ]))
+  })
+
+  it('derives only matched Master blocks for Master-aware cases and none for the no-Master fallback', () => {
+    const projectDelivery = masterEvidenceForEvalCase(evalCase('master-backed-project-delivery'))
+    expect(projectDelivery.byTemplateExperience.experience_0?.blocks.map((block) => block.blockId)).toEqual([
+      'master_experience_0_block_0',
+      'master_experience_0_block_1',
+      'master_experience_0_block_2',
+    ])
+    const crossExperience = masterEvidenceForEvalCase(evalCase('master-cross-experience-leak'))
+    expect(crossExperience.byTemplateExperience.experience_0?.blocks.map((block) => block.blockId)).toEqual(['master_experience_0_block_0'])
+    expect(masterEvidenceForEvalCase(evalCase('no-master-fallback'))).toEqual({ byTemplateExperience: {}, masterBlockExperienceIds: {} })
+  })
+
+  it('accepts an exact cited Master metric and rejects missing or cross-experience Master provenance', () => {
+    const metricCase = evalCase('master-supported-metric')
+    const metricSource = metricCase.resumeBlocks[1].text
+    const metricResponse = {
+      analysis: { matched: [], understated: [{ requirement: 'Improve processing time', evidenceBlockIds: ['paragraph_1'], masterBlockIds: ['master_experience_0_block_0'] }], missing: [] },
+      edits: [{ blockId: 'paragraph_1', text: metricSource.replace('.', '; improved processing time by 35%.'), sourceMasterBlockIds: ['master_experience_0_block_0'] }],
+    }
+    const metricSummary = evaluateTailoringResponse(metricCase, metricResponse)
+    expect(metricSummary.acceptedEditCount).toBe(1)
+    expect(metricSummary.changedNumbers).toEqual([])
+    expect(metricSummary.safetyPass).toBe(true)
+
+    const projectCase = evalCase('master-backed-project-delivery')
+    const missingCitation = evaluateTailoringResponse(projectCase, {
+      analysis: { matched: [], understated: [{ requirement: 'Sprint planning', evidenceBlockIds: ['paragraph_1'] }], missing: [] },
+      edits: [{ blockId: 'paragraph_1', text: 'Worked with cross-functional teams on sprint planning.' }],
+    })
+    expect(missingCitation.rejectedEditReasons).toContain('master_provenance_required')
+
+    const crossCase = evalCase('master-cross-experience-leak')
+    const crossExperience = evaluateTailoringResponse(crossCase, {
+      analysis: { matched: [{ requirement: 'React', evidenceBlockIds: ['paragraph_1'] }], understated: [{ requirement: 'TypeScript', evidenceBlockIds: ['paragraph_1'] }], missing: [] },
+      edits: [{ blockId: 'paragraph_1', text: 'Built React TypeScript applications for product teams.', sourceMasterBlockIds: ['master_experience_1_block_0'] }],
+    })
+    expect(crossExperience.rejectedEditReasons).toContain('master_source_cross_experience')
+    expect(crossExperience.safetyPass).toBe(true)
+  })
+
+  it('keeps JD-only banking out while allowing explicitly cited Master leadership', () => {
+    const bankingCase = evalCase('master-jd-only-banking')
+    const bankingSource = bankingCase.resumeBlocks[1].text
+    const banking = evaluateTailoringResponse(bankingCase, {
+      analysis: { matched: [], understated: [{ requirement: 'Banking analysis', evidenceBlockIds: ['paragraph_1'] }], missing: [{ requirement: 'Banking' }] },
+      edits: [{ blockId: 'paragraph_1', text: bankingSource.replace('product delivery', 'banking delivery'), sourceMasterBlockIds: ['master_experience_0_block_0'] }],
+    })
+    expect(banking.acceptedEditCount).toBe(0)
+    expect(banking.rejectedEditReasons).toContain('unsupported_master_fact')
+
+    const leadershipCase = evalCase('master-supported-leadership')
+    const leadershipSource = leadershipCase.resumeBlocks[1].text
+    const leadership = evaluateTailoringResponse(leadershipCase, {
+      analysis: { matched: [], understated: [{ requirement: 'Lead analyst teams', evidenceBlockIds: ['paragraph_1'], masterBlockIds: ['master_experience_0_block_0'] }], missing: [] },
+      edits: [{ blockId: 'paragraph_1', text: leadershipSource.replace('.', '; led a team of 4 analysts.'), sourceMasterBlockIds: ['master_experience_0_block_0'] }],
+    })
+    expect(leadership.acceptedEditCount).toBe(1)
+    expect(leadership.safetyPass).toBe(true)
   })
 
   it('does not require unrelated positive facts in evaluator-only boundary cases', () => {

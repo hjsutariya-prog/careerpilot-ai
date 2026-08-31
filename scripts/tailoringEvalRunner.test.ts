@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatTailoringEvalCase, parseTailoringEvalRuns } from './tailoringEvalRunner'
+import { formatTailoringEvalCase, parseTailoringEvalOptions, parseTailoringEvalRuns } from './tailoringEvalRunner'
 
 describe('live tailoring evaluation output', () => {
   it('prints a readable case summary without raw API data', () => {
@@ -67,5 +67,11 @@ describe('live tailoring evaluation output', () => {
   it('rejects invalid --runs values', () => {
     expect(() => parseTailoringEvalRuns(['--runs=0'])).toThrow('positive integer')
     expect(() => parseTailoringEvalRuns(['--runs=two'])).toThrow('positive integer')
+  })
+
+  it('parses an optional exact case filter without changing the default run count', () => {
+    expect(parseTailoringEvalOptions(['--case=master-backed-project-delivery'])).toEqual({ runs: 1, caseId: 'master-backed-project-delivery' })
+    expect(parseTailoringEvalOptions(['--runs=3', '--case=master-backed-project-delivery'])).toEqual({ runs: 3, caseId: 'master-backed-project-delivery' })
+    expect(() => parseTailoringEvalOptions(['--case='])).toThrow('must name an evaluation case')
   })
 })
