@@ -15,6 +15,7 @@ import type * as ai_evals_tailoringEvalCases from "../ai/evals/tailoringEvalCase
 import type * as ai_resumeBlocks from "../ai/resumeBlocks.js";
 import type * as ai_tailoringGeminiConfig from "../ai/tailoringGeminiConfig.js";
 import type * as ai_tailoringPrompt from "../ai/tailoringPrompt.js";
+import type * as ai_tailoringRepair from "../ai/tailoringRepair.js";
 import type * as ai_tailoringSchema from "../ai/tailoringSchema.js";
 import type * as ai_tailoringValidation from "../ai/tailoringValidation.js";
 import type * as auth from "../auth.js";
@@ -56,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   "ai/resumeBlocks": typeof ai_resumeBlocks;
   "ai/tailoringGeminiConfig": typeof ai_tailoringGeminiConfig;
   "ai/tailoringPrompt": typeof ai_tailoringPrompt;
+  "ai/tailoringRepair": typeof ai_tailoringRepair;
   "ai/tailoringSchema": typeof ai_tailoringSchema;
   "ai/tailoringValidation": typeof ai_tailoringValidation;
   auth: typeof auth;
