@@ -374,6 +374,9 @@ function App() {
   const hasRoutedSignedInUser = useRef(false)
   const hasRecoveredOwnerData = useRef(false)
   const [ownerDataReady, setOwnerDataReady] = useState(false)
+  const signOutAndClear = async () => {
+    await signOut()
+  }
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -414,7 +417,7 @@ function App() {
 
   if (screen !== 'landing') {
     const signOutFromDashboard = async () => {
-      await signOut()
+      await signOutAndClear()
       setScreen('landing')
     }
 
@@ -433,7 +436,7 @@ function App() {
       <header className="topbar">
         <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
         <nav aria-label="Landing page navigation" className="topbar-actions">
-          {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOut()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
+          {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOutAndClear()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
           {isAuthenticated ? <button className="get-started" onClick={openDashboard} type="button">Open dashboard</button> : <button className="get-started" onClick={openDashboard} type="button">Get started</button>}
         </nav>
       </header>

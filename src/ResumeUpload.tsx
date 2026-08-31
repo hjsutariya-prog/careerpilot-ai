@@ -3,6 +3,7 @@ import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { detectResumeSkills } from './resumeSkills'
+import { sha256Text } from './resumeFingerprint'
 
 const MAX_BYTES = 10 * 1024 * 1024
 const allowed = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
@@ -43,11 +44,12 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
       const text = await readableText(file)
       if (text.length < 40) throw new Error('Your resume has no readable text. Export it again as a text-based PDF or DOCX.')
       const detectedSkills = detectResumeSkills(text)
+      const contentHash = await sha256Text(text)
       const uploadUrl = await generateUploadUrl()
       const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': file.type }, body: file })
       if (!response.ok) throw new Error('We could not upload that file. Please try again.')
       const { storageId } = await response.json() as { storageId: string }
-      await saveResume({ storageId: storageId as never, fileName: file.name, mimeType: file.type, sizeBytes: file.size, extractedTextLength: text.length, detectedSkills })
+      await saveResume({ storageId: storageId as never, fileName: file.name, mimeType: file.type, sizeBytes: file.size, extractedTextLength: text.length, extractedText: text.slice(0, 60_000), detectedSkills, contentHash })
       setUploadedFile({ name: file.name, size: file.size })
       setMessage('Resume saved privately. Now set the details for your daily brief.')
     } catch (error) { setMessage(error instanceof Error ? error.message : 'We could not read that file. Try another PDF or DOCX.') }

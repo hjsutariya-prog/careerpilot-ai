@@ -16,6 +16,14 @@ export type LiveSuggestionRecord = {
   matchScore: number
   matchExplanation: string
   isRelatedMatch: boolean
+  matchSource?: 'preferences' | 'resume'
+  matchGaps?: string[]
+  matchEvidence?: { requirement: string; resumeLine: number }[]
+  skillsScore?: number
+  roleScore?: number
+  responsibilitiesScore?: number
+  workArrangementScore?: number
+  locationScore?: number
   job: LiveJobRecord | null
 }
 
@@ -50,6 +58,10 @@ export function toLiveJobCard(suggestion: LiveSuggestionRecord) {
     applyUrl: job.applyUrl,
     matchScore: suggestion.matchScore,
     matchReason: suggestion.matchExplanation,
+    matchSource: suggestion.matchSource ?? 'preferences',
+    matchGaps: suggestion.matchGaps ?? [],
+    matchEvidence: suggestion.matchEvidence ?? [],
+    scoreBreakdown: suggestion.matchSource === 'resume' ? { skills: suggestion.skillsScore ?? 0, role: suggestion.roleScore ?? 0, responsibilities: suggestion.responsibilitiesScore ?? 0, workArrangement: suggestion.workArrangementScore ?? 0, location: suggestion.locationScore ?? 0 } : null,
     isRelatedMatch: suggestion.isRelatedMatch,
     freshnessLabel: `Last updated ${formatDate(job.lastUpdatedAt)}`,
     checkedLabel: `Checked ${formatDate(job.lastSeenAt)}`,

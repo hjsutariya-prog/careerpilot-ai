@@ -1,0 +1,22 @@
+.application-kit{position:relative;gap:12px!important;padding:18px!important;background:#edf4e9!important;box-shadow:inset 3px 0 0 var(--workspace-lime),0 0 0 1px rgba(7,62,70,.08)!important}
+.application-kit-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.application-kit-heading>span{color:var(--workspace-teal);font:700 20px/1 'DM Mono',monospace}
+.application-kit h2{color:var(--workspace-deep);font:700 23px/.98 'Instrument Sans',sans-serif;letter-spacing:-.055em}
+.role-focus-side>.application-kit>p:not(.role-detail-label),.application-kit-message{color:#42666a;font-size:12px;line-height:1.55}
+.application-kit-format{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:3px;color:var(--workspace-muted);font:700 10px 'DM Mono',monospace;letter-spacing:.045em;text-transform:uppercase}
+.application-kit-format select{min-height:34px;padding:0 8px;border:1px solid rgba(7,62,70,.22);background:#fffef9;color:var(--workspace-deep);font:700 11px 'DM Mono',monospace}
+.application-kit-format select:focus-visible,.application-kit .tailor-resume:focus-visible{outline:3px solid var(--workspace-coral);outline-offset:3px}
+.application-kit .tailor-resume{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;padding:11px 13px;border:0;border-radius:0;background:var(--workspace-teal);color:#fffef9;font:800 12px 'Manrope',sans-serif}
+.application-kit .tailor-resume:hover{background:var(--workspace-deep);transform:translateY(-1px)}
+.application-kit .tailor-resume:disabled{cursor:wait;opacity:.68}
+.application-kit .tailor-resume span{color:var(--workspace-lime);font-size:17px;line-height:1}
+.application-kit-message{padding-top:2px}
+.application-kit-message.error{color:#a64229}
+
+.application-kit-changes{display:grid;gap:8px;padding-top:4px;border-top:1px solid rgba(7,62,70,.13)}
+.application-kit-changes ol{display:grid;gap:8px;padding:0;margin:0;list-style:none}
+.application-kit-changes li{display:grid;gap:3px;padding-left:10px;border-left:2px solid var(--workspace-lime);color:#42666a;font-size:11px;line-height:1.4}
+.application-kit-changes s{color:var(--workspace-muted);text-decoration-color:var(--workspace-coral)}
+.application-kit-changes strong{color:var(--workspace-deep);font-weight:700}
+
+@media (max-width:760px){.application-kit{padding:17px!important}.application-kit h2{font-size:22px}}

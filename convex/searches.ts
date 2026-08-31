@@ -104,7 +104,16 @@ export const saveSuggestions = internalMutation({
       if (!existing) await ctx.db.insert("jobSuggestions", { ...suggestion, jobId, ownerId: args.ownerId, searchRunId: args.searchRunId });
     }
 
-    await ctx.db.patch(args.searchRunId, { status: "complete", completedAt: Date.now(), resultCount: uniqueSuggestions.length, sourceWarning: args.sourceWarning });
+  },
+});
+
+export const completeSearch = internalMutation({
+  args: { searchRunId: v.id("searchRuns"), sourceWarning: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const searchRun = await ctx.db.get(args.searchRunId);
+    if (!searchRun) return;
+    const suggestions = await ctx.db.query("jobSuggestions").withIndex("by_search_rank", (q) => q.eq("searchRunId", args.searchRunId)).collect();
+    await ctx.db.patch(args.searchRunId, { status: "complete", completedAt: Date.now(), resultCount: suggestions.length, sourceWarning: args.sourceWarning });
   },
 });
 
@@ -114,6 +123,7 @@ export const ensureFirstSearch = internalMutation({
     const preferences = await ctx.db.query("preferences").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).first();
     const resume = await ctx.db.query("resumes").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).order("desc").first();
     if (!preferences) return { firstQueued: false, reason: "preferences-missing" };
+    if (resume?.extractedText) await ctx.scheduler.runAfter(0, internal.resumeProfiles.ensureForResume, { resumeId: resume._id });
 
     const nextRunAt = nextRunAtForIst(preferences.dailyTime, Date.now());
     const existingSchedule = await ctx.db.query("searchSchedules").withIndex("by_owner", (q) => q.eq("ownerId", args.ownerId)).unique();
@@ -275,5 +285,12 @@ export const runSearch = internalAction({
       suggestions: suggestions.map((suggestion) => ({ jobId: jobsById.get(suggestion.id)!, rank: suggestion.rank, matchScore: suggestion.matchScore, matchExplanation: suggestion.matchExplanation, isRelatedMatch: suggestion.isRelatedMatch })),
       sourceWarning,
     });
+    const matching = await ctx.runAction(internal.resumeMatching.matchSearchRun, { searchRunId: args.searchRunId });
+    if (matching.state === "pending") {
+      await ctx.scheduler.runAfter(5_000, internal.searches.runSearch, { searchRunId: args.searchRunId });
+      return;
+    }
+    const matchWarning = matching.state === "fallback" ? "Resume analysis is unavailable, so this brief uses your saved preferences for now." : undefined;
+    await ctx.runMutation(internal.searches.completeSearch, { searchRunId: args.searchRunId, sourceWarning: sourceWarning ?? matchWarning });
   },
 });

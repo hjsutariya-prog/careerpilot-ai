@@ -62,9 +62,8 @@ export function getLiveSuggestions(preferences: LiveSearchPreferences, jobs: rea
     .filter((job) => {
       if (avoidedCompanies.includes(normalise(job.companyName))) return false;
       const remoteMatch = isRemote(job) && preferences.workPreferences.includes("Remote");
-      const cityMatch = Boolean(matchingCity(job, preferences.cities));
       const officeStyleAllowed = !isRemote(job) && preferences.workPreferences.some((preference) => preference === "Hybrid" || preference === "On-site");
-      return remoteMatch || (cityMatch && officeStyleAllowed);
+      return remoteMatch || officeStyleAllowed;
     })
     .map((job) => {
       const role = includesRole(job, preferences.roles);
@@ -72,7 +71,7 @@ export function getLiveSuggestions(preferences: LiveSearchPreferences, jobs: rea
       const city = matchingCity(job, preferences.cities);
       const remoteMatch = isRemote(job) && preferences.workPreferences.includes("Remote");
       const isRelatedMatch = !role;
-      const score = Math.min(100, (role ? 56 : 14) + Math.min(skills.length, 3) * 10 + (city || remoteMatch ? 14 : 0) + (remoteMatch ? 6 : 4));
+      const score = Math.min(100, (role ? 56 : 14) + Math.min(skills.length, 3) * 10 + (city || remoteMatch ? 2 : 0) + (remoteMatch ? 6 : 4));
       const reasons = [role ? `Matches ${role}` : "Related to your selected roles"];
       if (city) reasons.push(`Based in ${city}`);
       else if (remoteMatch) reasons.push("Remote role");

@@ -19,4 +19,9 @@ describe("getLiveSuggestions", () => {
     expect(getLiveSuggestions(preferences, jobs).map((job) => job.id)).toEqual(["job-a", "job-b"]);
     expect(getLiveSuggestions(preferences, jobs)[1]?.isRelatedMatch).toBe(true);
   });
+
+  it("keeps an India job in another city for resume-based scoring", () => {
+    const anotherIndiaCity = { ...jobs[0], id: "job-c", cities: ["Pune"], locationLabel: "Pune, India" };
+    expect(getLiveSuggestions(preferences, [anotherIndiaCity])).toHaveLength(1);
+  });
 });

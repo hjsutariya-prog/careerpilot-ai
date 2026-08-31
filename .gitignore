@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 .vercel
+/tmp/
 
 # Local job-source workbooks are converted into the tracked app data module.
 data/*.xlsx

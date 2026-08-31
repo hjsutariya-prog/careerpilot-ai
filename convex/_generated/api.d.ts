@@ -12,7 +12,9 @@ import type * as accountRecovery from "../accountRecovery.js";
 import type * as adminAccess from "../adminAccess.js";
 import type * as auth from "../auth.js";
 import type * as connections from "../connections.js";
+import type * as credits from "../credits.js";
 import type * as crons from "../crons.js";
+import type * as gemini from "../gemini.js";
 import type * as greenhouse from "../greenhouse.js";
 import type * as greenhouseNormalization from "../greenhouseNormalization.js";
 import type * as greenhouseRefresh from "../greenhouseRefresh.js";
@@ -21,6 +23,9 @@ import type * as http from "../http.js";
 import type * as jobActions from "../jobActions.js";
 import type * as owner from "../owner.js";
 import type * as preferences from "../preferences.js";
+import type * as resumeDocuments from "../resumeDocuments.js";
+import type * as resumeMatching from "../resumeMatching.js";
+import type * as resumeProfiles from "../resumeProfiles.js";
 import type * as resumes from "../resumes.js";
 import type * as roleSummaries from "../roleSummaries.js";
 import type * as roleSummaryRefresh from "../roleSummaryRefresh.js";
@@ -28,6 +33,7 @@ import type * as searchMatching from "../searchMatching.js";
 import type * as searchScheduling from "../searchScheduling.js";
 import type * as searches from "../searches.js";
 import type * as sourceHealth from "../sourceHealth.js";
+import type * as tailoredResumes from "../tailoredResumes.js";
 
 import type {
   ApiFromModules,
@@ -40,7 +46,9 @@ declare const fullApi: ApiFromModules<{
   adminAccess: typeof adminAccess;
   auth: typeof auth;
   connections: typeof connections;
+  credits: typeof credits;
   crons: typeof crons;
+  gemini: typeof gemini;
   greenhouse: typeof greenhouse;
   greenhouseNormalization: typeof greenhouseNormalization;
   greenhouseRefresh: typeof greenhouseRefresh;
@@ -49,6 +57,9 @@ declare const fullApi: ApiFromModules<{
   jobActions: typeof jobActions;
   owner: typeof owner;
   preferences: typeof preferences;
+  resumeDocuments: typeof resumeDocuments;
+  resumeMatching: typeof resumeMatching;
+  resumeProfiles: typeof resumeProfiles;
   resumes: typeof resumes;
   roleSummaries: typeof roleSummaries;
   roleSummaryRefresh: typeof roleSummaryRefresh;
@@ -56,6 +67,7 @@ declare const fullApi: ApiFromModules<{
   searchScheduling: typeof searchScheduling;
   searches: typeof searches;
   sourceHealth: typeof sourceHealth;
+  tailoredResumes: typeof tailoredResumes;
 }>;
 
 /**
