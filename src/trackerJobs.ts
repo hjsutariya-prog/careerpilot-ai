@@ -21,6 +21,18 @@ export type TrackedJobGroups = {
   rejected: TrackedJob[]
 }
 
+const nextTrackerStatuses: Record<JobActionStatus, readonly JobActionStatus[]> = {
+  Apply: ['Resume shortlisted', 'Interview', 'On Hold', 'Reject'],
+  'Resume shortlisted': ['Interview', 'On Hold', 'Reject'],
+  Interview: ['On Hold', 'Reject'],
+  'On Hold': ['Apply'],
+  Reject: ['Apply'],
+}
+
+export function getNextTrackerStatuses(status: JobActionStatus) {
+  return nextTrackerStatuses[status]
+}
+
 export function getUndecidedJobs<T extends { id: string }>(jobs: T[], actions: ReadonlyArray<Pick<StoredJobAction, 'jobId'>>) {
   const decidedJobIds = new Set(actions.map((action) => action.jobId))
   return jobs.filter((job) => !decidedJobIds.has(job.id))

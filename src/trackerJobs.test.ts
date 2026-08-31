@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SampleJob } from './data/sampleJobs'
-import { getUndecidedJobs, groupTrackedJobs } from './trackerJobs'
+import { getNextTrackerStatuses, getUndecidedJobs, groupTrackedJobs } from './trackerJobs'
 
 function job(id: string): SampleJob {
   return {
@@ -50,5 +50,13 @@ describe('tracker job helpers', () => {
     expect(groups.onHold.map(({ job: item }) => item.id)).toEqual(['hold'])
     expect(groups.rejected.map(({ job: item }) => item.id)).toEqual(['rejected'])
     expect(groups.rejected[0].action.updatedAt).toBe(300)
+  })
+
+  it('allows only the approved lifecycle transitions', () => {
+    expect(getNextTrackerStatuses('Apply')).toEqual(['Resume shortlisted', 'Interview', 'On Hold', 'Reject'])
+    expect(getNextTrackerStatuses('Resume shortlisted')).toEqual(['Interview', 'On Hold', 'Reject'])
+    expect(getNextTrackerStatuses('Interview')).toEqual(['On Hold', 'Reject'])
+    expect(getNextTrackerStatuses('On Hold')).toEqual(['Apply'])
+    expect(getNextTrackerStatuses('Reject')).toEqual(['Apply'])
   })
 })

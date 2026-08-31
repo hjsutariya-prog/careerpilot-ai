@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "build:sample-jobs": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/build-sample-job-data.ps1",
+    "check": "npm test && npm run lint && npm run build",
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run"
@@ -16,6 +17,9 @@
     "@convex-dev/auth": "^0.0.95",
     "@convex-dev/resend": "^0.2.7",
     "convex": "^1.45.0",
+    "docx": "^9.7.1",
+    "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.2",
     "pdfjs-dist": "^6.3.289",
     "react": "^19.2.8",

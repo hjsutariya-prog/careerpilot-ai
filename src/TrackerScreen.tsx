@@ -1,17 +1,8 @@
 import { useState } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
-
-type JobActionStatus = 'Apply' | 'Reject' | 'On Hold' | 'Resume shortlisted' | 'Interview'
+import { getNextTrackerStatuses, type JobActionStatus } from './trackerJobs'
 type TrackedItem = NonNullable<ReturnType<typeof useQuery<typeof api.searches.trackedJobsMine>>>[number]
-
-const alternateStatuses: Record<JobActionStatus, readonly JobActionStatus[]> = {
-  Apply: ['Resume shortlisted', 'Interview', 'On Hold', 'Reject'],
-  'Resume shortlisted': ['Interview', 'Apply', 'On Hold', 'Reject'],
-  Interview: ['Apply', 'On Hold', 'Reject'],
-  'On Hold': ['Apply', 'Resume shortlisted', 'Interview', 'Reject'],
-  Reject: ['Apply', 'Resume shortlisted', 'Interview', 'On Hold'],
-}
 
 function formatSavedDate(value: number) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
@@ -20,7 +11,7 @@ function TrackerJobRow({ item, savingJobId, onSave }: { item: TrackedItem; savin
   const { action, job } = item
   const jobId = String(job._id)
   const isSaving = savingJobId === jobId
-  const alternateActions = alternateStatuses[action.status]
+  const alternateActions = getNextTrackerStatuses(action.status)
 
   return <article className="tracker-job">
     <div className="tracker-job-main">
