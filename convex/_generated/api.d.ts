@@ -10,6 +10,13 @@
 
 import type * as accountRecovery from "../accountRecovery.js";
 import type * as adminAccess from "../adminAccess.js";
+import type * as ai_evals_tailoringEval from "../ai/evals/tailoringEval.js";
+import type * as ai_evals_tailoringEvalCases from "../ai/evals/tailoringEvalCases.js";
+import type * as ai_resumeBlocks from "../ai/resumeBlocks.js";
+import type * as ai_tailoringGeminiConfig from "../ai/tailoringGeminiConfig.js";
+import type * as ai_tailoringPrompt from "../ai/tailoringPrompt.js";
+import type * as ai_tailoringSchema from "../ai/tailoringSchema.js";
+import type * as ai_tailoringValidation from "../ai/tailoringValidation.js";
 import type * as auth from "../auth.js";
 import type * as connections from "../connections.js";
 import type * as credits from "../credits.js";
@@ -44,6 +51,13 @@ import type {
 declare const fullApi: ApiFromModules<{
   accountRecovery: typeof accountRecovery;
   adminAccess: typeof adminAccess;
+  "ai/evals/tailoringEval": typeof ai_evals_tailoringEval;
+  "ai/evals/tailoringEvalCases": typeof ai_evals_tailoringEvalCases;
+  "ai/resumeBlocks": typeof ai_resumeBlocks;
+  "ai/tailoringGeminiConfig": typeof ai_tailoringGeminiConfig;
+  "ai/tailoringPrompt": typeof ai_tailoringPrompt;
+  "ai/tailoringSchema": typeof ai_tailoringSchema;
+  "ai/tailoringValidation": typeof ai_tailoringValidation;
   auth: typeof auth;
   connections: typeof connections;
   credits: typeof credits;
