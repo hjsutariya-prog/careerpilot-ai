@@ -2,9 +2,10 @@ import { action, internalQuery, mutation } from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireOwner } from './owner'
-import { requestGeminiText } from './gemini'
-import { tailoringGeminiConfig } from './ai/tailoringGeminiConfig'
+import { requestGeminiResponse, requestGeminiText } from './gemini'
+import { tailoringGeminiConfig, tailoringJsonRepairGeminiConfig } from './ai/tailoringGeminiConfig'
 import { buildTailoringUserPrompt } from './ai/tailoringPrompt'
+import { buildTailoringJsonRepairPrompt, requiresTailoringJsonRepair } from './ai/tailoringRepair'
 import { emptyTailoringAnalysis, parseLegacyIndexedTailoringResponse, parseLegacyTailoringReplacements, parseTailoringResponse, tailoringResponseSchema, type ParsedTailoringResponse } from './ai/tailoringSchema'
 import { actionTense, isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, validateTailoringResponse } from './ai/tailoringValidation'
 import { areResumeBlocksConsistent, type ResumeBlock } from './ai/resumeBlocks'
@@ -95,6 +96,14 @@ async function providerText(prompt: string, expectsTemplateEdits: boolean) {
   return await requestGeminiText({ ...tailoringGeminiConfig, prompt, ...(expectsTemplateEdits ? { schema: tailoringResponseSchema } : {}) })
 }
 
+async function repairedProviderText(malformedOutput: string) {
+  return await requestGeminiText({
+    ...tailoringJsonRepairGeminiConfig,
+    prompt: buildTailoringJsonRepairPrompt(malformedOutput),
+    schema: tailoringResponseSchema,
+  })
+}
+
 export const inputForGeneration = internalQuery({ args: { ownerId: v.string(), jobId: v.id('jobs') }, handler: async (ctx, args) => {
   const resume = await ctx.db.query('resumes').withIndex('by_owner', (q) => q.eq('ownerId', args.ownerId)).order('desc').first()
   const latest = (await ctx.db.query('searchRuns').withIndex('by_owner_requested', (q) => q.eq('ownerId', args.ownerId)).order('desc').collect())[0]
@@ -122,11 +131,18 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
   const requestStartedAt = Date.now()
   try {
     const prompt = buildTailoringUserPrompt({ jobTitle: input.title, companyName: input.companyName, jobDescription: input.description, resumeText: input.resumeText, editableSlots: args.templateSlots })
-    const text = (await providerText(prompt, Boolean(args.templateSlots))).trim()
+    const initialResponse = args.templateSlots
+      ? await requestGeminiResponse({ ...tailoringGeminiConfig, prompt, schema: tailoringResponseSchema })
+      : { text: await providerText(prompt, false), status: 'completed' }
+    const malformedInitialResponse = Boolean(args.templateSlots)
+      && (initialResponse.status === 'incomplete' || requiresTailoringJsonRepair(initialResponse.text))
+    const text = (malformedInitialResponse
+      ? await repairedProviderText(initialResponse.text)
+      : initialResponse.text).trim()
     if (args.templateSlots) {
       const replacements = templateReplacements(text, args.templateSlots)
       if (replacements) return { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: replacements.join('\n'), replacements, mode: 'ai', reservationId: String(reservation.reservationId) }
-      console.warn('Gemini tailoring response did not contain safe template-slot replacements.', { durationMs: Date.now() - requestStartedAt, ...templateReplacementDiagnostics(text, args.templateSlots) })
+      console.warn('Gemini tailoring response did not contain safe template-slot replacements.', { durationMs: Date.now() - requestStartedAt, repairedMalformedJson: malformedInitialResponse, ...templateReplacementDiagnostics(text, args.templateSlots) })
       await ctx.runMutation(internal.credits.release, { reservationId: reservation.reservationId })
       return templateFallback()
     }

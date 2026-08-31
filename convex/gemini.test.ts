@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { geminiText } from './gemini'
+import { geminiResponse, geminiText } from './gemini'
 
 describe('Gemini interaction output', () => {
   it('returns text from the final model-output step', () => {
@@ -13,5 +13,12 @@ describe('Gemini interaction output', () => {
 
   it('returns an empty string when no model text exists', () => {
     expect(geminiText({ steps: [{ type: 'user_input', content: [{ type: 'text', text: 'hello' }] }] })).toBe('')
+  })
+
+  it('keeps the provider completion status with the output text', () => {
+    expect(geminiResponse({ status: 'incomplete', steps: [{ type: 'model_output', content: [{ type: 'text', text: '{"edits":' }] }] })).toEqual({
+      status: 'incomplete',
+      text: '{"edits":',
+    })
   })
 })
