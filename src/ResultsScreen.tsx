@@ -1,16 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useAction, useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
 import type { Id } from '../convex/_generated/dataModel'
 import { findCompanyConnections } from './connectionMatching'
 import { toLiveJobCard } from './liveJobs'
-import { createRoleBrief } from './roleBrief'
 import { FormattedJobDescription } from './FormattedJobDescription'
 import { getUndecidedJobs } from './trackerJobs'
 import { downloadResumeBlob } from './tailoredResumeDownload'
 import { tailoringOutcomeMessage } from './tailoringMessages'
 import './ApplicationKit.css'
-import { createResumeBlocksFromDocxSlots, describeTemplateChanges, extractDocxSlots, patchDocxTemplate, type DocxSlot } from './docxTemplate'
+import { createResumeBlocksFromDocxSlots, extractDocxSlots, patchDocxTemplate, type DocxSlot } from './docxTemplate'
 import type { TailoringMatchPreview } from '../convex/tailoredResumes'
 import type { TailoringMerge, TailoringReorder } from '../convex/ai/tailoringSchema'
 
@@ -36,12 +35,20 @@ type ResultsScreenProps = {
   onOpenTracker: () => void
   onOpenConnections: () => void
 }
-function matchLabel(score: number, isRelatedMatch: boolean, source: 'preferences' | 'resume' = 'preferences') {
-  if (source === 'preferences') return 'Preferences match'
-  if (isRelatedMatch) return 'Related role'
+function matchLabel(score: number, isRelatedMatch: boolean, _matchSource?: string) {
+  if (isRelatedMatch) return 'Good fit'
   if (score >= 80) return 'Strong fit'
   if (score >= 60) return 'Good fit'
-  return 'Potential fit'
+  return 'Stretch'
+}
+
+function JobMetaIcon({ name }: { name: 'location' | 'work' | 'date' }) {
+  return <svg aria-hidden="true" className="job-meta-icon" fill="none" height="13" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" viewBox="0 0 24 24" width="13">{name === 'location' ? <><path d="M20 10.5c0 5-8 10-8 10s-8-5-8-10a8 8 0 1 1 16 0Z" /><circle cx="12" cy="10.5" r="2.5" /></> : name === 'work' ? <><rect height="14" rx="2" width="18" x="3" y="6" /><path d="M9 6V4h6v2M3 11h18M10 11v2h4v-2" /></> : <><rect height="17" rx="2" width="18" x="3" y="4" /><path d="M16 2v4M8 2v4M3 9h18" /></>}</svg>
+}
+
+function companyMarkFromName(companyName: string) {
+  const words = companyName.match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)/g) ?? [companyName]
+  return words.length > 1 ? words.map((word) => word[0]).join('').slice(0, 2).toUpperCase() : companyName.replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase()
 }
 
 function BriefSidebar({ jobCount, onBack, onEditPreferences, onOpenConnections, onOpenTracker }: ResultsScreenProps & { jobCount: number }) {
@@ -67,37 +74,18 @@ function ResultsLoading({ embedded, onBack }: Pick<ResultsScreenProps, 'embedded
   return <main className="results-shell"><header className="preference-topbar results-topbar"><button className="back-home" onClick={onBack} type="button"><span aria-hidden="true">←</span> Home</button><a className="brand" href="#top" onClick={(event) => { event.preventDefault(); onBack() }}>CareerPilot<span>.AI</span></a></header><section aria-live="polite" className="results-loading"><span aria-hidden="true" className="loading-orbit" /><p>Opening your live job brief…</p></section></main>
 }
 
-function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded: boolean; job: JobCard; isSaving: boolean; onBack: () => void; onSave: (jobId: string, status: JobActionStatus) => void }) {
-  const brief = createRoleBrief(job.description)
-  const aiSummary = useQuery(api.roleSummaries.mine, { jobId: job.id as Id<'jobs'> })
+function FocusedRoleView({ embedded, job, isSaving, onBack, onOpenConnections, onSave }: { embedded: boolean; job: JobCard; isSaving: boolean; onBack: () => void; onOpenConnections: () => void; onSave: (jobId: string, status: JobActionStatus) => void }) {
   const savedResume = useQuery(api.resumes.mine)
-  const requestAiSummary = useMutation(api.roleSummaries.request)
+  const savedConnections = useQuery(api.connections.mine)
   const generateTailoredResume = useAction(api.tailoredResumes.generate)
   const completeTailoredResume = useMutation(api.tailoredResumes.complete)
-  const cancelTailoredResume = useMutation(api.tailoredResumes.cancel)
   const createPdfUpload = useMutation(api.resumeDocuments.createUpload)
   const convertToPdf = useAction(api.resumeDocuments.convertToPdf)
   const credits = useQuery(api.credits.balanceMine)
-  const [summaryRequestError, setSummaryRequestError] = useState('')
   const [tailoringJobId, setTailoringJobId] = useState<string | null>(null)
   const [tailorMessage, setTailorMessage] = useState<{ tone: 'error' | 'status'; text: string } | null>(null)
-  const [tailorChanges, setTailorChanges] = useState<{ before: string; after: string }[]>([])
   const [tailoringPreview, setTailoringPreview] = useState<TailoringPreviewState | null>(null)
-  const [resumeFormat, setResumeFormat] = useState<'docx' | 'pdf'>('docx')
-
-  useEffect(() => {
-    void requestAiSummary({ jobId: job.id as Id<'jobs'> }).catch(() => setSummaryRequestError('We could not start the AI summary. Showing the listing-based summary instead.'))
-  }, [job.id, requestAiSummary])
-
-  const summary = aiSummary?.status === 'ready' ? aiSummary.summary : brief.summary
-  const responsibilities = aiSummary?.status === 'ready' ? aiSummary.responsibilities ?? [] : brief.responsibilities
-  const summaryNote = aiSummary?.status === 'ready'
-    ? 'AI summary based on the company listing'
-    : aiSummary?.status === 'queued' || aiSummary?.status === 'generating'
-      ? 'Preparing an AI summary. The original listing is ready below.'
-      : aiSummary?.status === 'failed'
-        ? aiSummary.failureMessage ?? 'Showing the listing-based summary instead.'
-        : summaryRequestError || 'Listing-based summary'
+  const resumeFormat = 'docx' as 'docx' | 'pdf'
 
   const previewTailoring = async () => {
     if (credits && credits.available < credits.tailoringCost) {
@@ -109,7 +97,6 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
       return
     }
     setTailorMessage(null)
-    setTailorChanges([])
     setTailoringPreview(null)
     setTailoringJobId(job.id)
     try {
@@ -136,7 +123,6 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
         return
       }
       setTailoringPreview({ source, slots, result: { fileName: result.fileName, replacements: result.replacements, reorders: result.reorders, merges: result.merges, reservationId: result.reservationId, preview: result.preview } })
-      setTailorChanges(describeTemplateChanges(slots, result.replacements))
       setTailorMessage({ tone: 'status', text: 'Review the evidence-backed changes and estimated match movement before generating your file.' })
     } catch (error) {
       const message = error instanceof Error && error.message.includes('Please re-upload your resume before tailoring it.')
@@ -178,27 +164,30 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
     }
   }
 
-  const discardTailoringPreview = async () => {
-    if (!tailoringPreview) return
-    setTailoringJobId(job.id)
-    try {
-      if (tailoringPreview.result.reservationId) await cancelTailoredResume({ reservationId: tailoringPreview.result.reservationId as Id<'creditLedger'> })
-      setTailoringPreview(null)
-      setTailorChanges([])
-      setTailorMessage({ tone: 'status', text: 'Preview discarded. No credits were used.' })
-    } catch {
-      setTailorMessage({ tone: 'error', text: 'We could not discard this preview. It will expire automatically.' })
-    } finally {
-      setTailoringJobId(null)
-    }
-  }
+  const saveStatus = onSave
+  const matchingConnections = findCompanyConnections(job.companyName, savedConnections?.connections ?? [])
+  const companyMark = companyMarkFromName(job.companyName)
+  const fitPointValues = job.strengths.length > 0 ? job.strengths.slice(0, 4).map((strength) => strength.requirement) : [job.fitSummary]
+  const fitPoints = [...new Map(fitPointValues.map((point) => [point.trim().toLowerCase(), point.trim()])).values()]
 
   return <WorkspaceFrame embedded={embedded}>
-    <section className="role-focus-view" aria-labelledby="focused-role-title">
-      <header className="role-focus-header"><button className="role-focus-back" onClick={onBack} type="button"><span aria-hidden="true">←</span> Back to jobs</button><p>{job.freshnessLabel}</p></header>
-      <div className="role-focus-hero"><p className="eyebrow">ROLE OVERVIEW</p><div><div aria-hidden="true" className="workspace-company-mark">{job.companyName.slice(0, 1)}</div><p>{job.companyName}</p></div><h1 id="focused-role-title">{job.title}</h1><div className="role-focus-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span><span><b>{job.matchScore}</b> {matchLabel(job.matchScore, job.isRelatedMatch, job.matchSource)}</span></div></div>
-      <div className="role-focus-layout"><section className="role-focus-main"><div className="role-focus-section"><p className="role-detail-label">Role summary</p>{summary ? <p className="role-focus-summary">{summary}</p> : <p className="role-focus-summary unavailable">This listing does not provide a separate role overview. The full company description is available below.</p>}<p className="role-summary-source" role={aiSummary?.status === 'queued' || aiSummary?.status === 'generating' ? 'status' : undefined}>{summaryNote}</p></div>{responsibilities.length > 0 && <div className="role-focus-section"><p className="role-detail-label">What you will work on</p><ol className="role-focus-responsibilities">{responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ol></div>}{aiSummary?.status === 'ready' && aiSummary.suitableFor && <div className="role-focus-section role-focus-suitable"><p className="role-detail-label">Best suited to</p><p>{aiSummary.suitableFor}</p></div>}<details className="role-focus-original"><summary>Open the original job description <span aria-hidden="true">↓</span></summary><FormattedJobDescription fallback={job.description} html={job.descriptionHtml} /></details></section><aside className="role-focus-side"><section><p className="role-detail-label">Why it fits</p><p>{job.matchReason}</p></section>{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).length > 0 && <section><p className="role-detail-label">Skills in this role</p><div className="role-skill-list">{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).slice(0, 8).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<section className="application-kit" aria-labelledby="application-kit-title"><div className="application-kit-heading"><p className="role-detail-label">Application kit</p><span aria-hidden="true">↳</span></div><h2 id="application-kit-title">Tailor your original Word resume</h2><p>Review safe changes and an estimated match movement before generating your file.</p><label className="application-kit-format">{credits ? `${credits.tailoringCost} credits` : 'Checking credits…'}<select aria-label="Resume download format" disabled={tailoringJobId === job.id} onChange={(event) => setResumeFormat(event.target.value as 'docx' | 'pdf')} value={resumeFormat}><option value="docx">DOCX</option><option value="pdf">PDF</option></select></label>{tailoringPreview ? <><section className="application-kit-preview" aria-labelledby="tailoring-preview-title"><p className="role-detail-label" id="tailoring-preview-title">Match estimate</p><p className="application-kit-score"><strong>{tailoringPreview.result.preview.projectedScore}%</strong><span>from {tailoringPreview.result.preview.baselineScore}% · +{tailoringPreview.result.preview.improvement} points</span></p><p>Based only on validated evidence surfaced in the suggested edits. It does not count missing requirements and is not a hiring guarantee.</p>{tailoringPreview.result.preview.surfacedRequirements.length > 0 && <p><b>Will surface:</b> {tailoringPreview.result.preview.surfacedRequirements.join(' · ')}</p>}{tailoringPreview.result.preview.stillMissingRequirements.length > 0 && <p><b>Still missing:</b> {tailoringPreview.result.preview.stillMissingRequirements.join(' · ')}</p>}</section>{tailorChanges.length > 0 && <section className="application-kit-changes" aria-labelledby="tailoring-summary-title"><p className="role-detail-label" id="tailoring-summary-title">Suggested modifications</p><ol>{tailorChanges.map((change) => <li key={change.before + change.after}><s>{change.before}</s><strong>{change.after}</strong></li>)}</ol></section>}<button className="tailor-resume application-kit-action" disabled={tailoringJobId === job.id} onClick={() => void generateTailoredFile()} type="button">{tailoringJobId === job.id ? (resumeFormat === 'pdf' ? 'Preparing PDF…' : 'Preparing DOCX…') : `Generate ${resumeFormat.toUpperCase()}`} <span aria-hidden="true">↓</span></button><button className="application-kit-discard" disabled={tailoringJobId === job.id} onClick={() => void discardTailoringPreview()} type="button">Discard preview</button></> : <button className="tailor-resume application-kit-action" disabled={tailoringJobId === job.id || savedResume === undefined || credits === undefined || (credits !== null && credits.available < credits.tailoringCost)} onClick={() => void previewTailoring()} type="button">{tailoringJobId === job.id ? 'Preparing preview…' : 'Preview suggested changes'} <span aria-hidden="true">→</span></button>}{tailorMessage && <p className={tailorMessage.tone === 'error' ? 'application-kit-message error' : 'application-kit-message'} role={tailorMessage.tone === 'error' ? 'alert' : 'status'}>{tailorMessage.text}</p>}</section><a aria-disabled={isSaving} className="workspace-apply role-focus-apply" href={job.applyUrl} onClick={() => void onSave(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply on {job.companyName} <span aria-hidden="true">↗</span></a><div className="role-focus-actions"><button disabled={isSaving} onClick={() => void onSave(job.id, 'On Hold')} type="button">Hold this role</button><button className="reject" disabled={isSaving} onClick={() => void onSave(job.id, 'Reject')} type="button">Reject</button></div></aside></div>
-    </section>
+    <div className="role-detail-overlay" role="presentation">
+      <div className="role-detail-overlay-dismiss" onClick={onBack} />
+      <aside className="role-detail-drawer" aria-labelledby="focused-role-title" role="dialog" aria-modal="true">
+        <div className="role-detail-drawer-head"><span>JOB DETAILS</span><button aria-label="Close job details" className="role-detail-close" onClick={onBack} type="button">×</button></div>
+        <div className="role-detail-company"><span className="role-detail-company-mark">{companyMark}</span><span><strong>{job.companyName}</strong><small>{job.freshnessLabel}</small></span></div>
+        <h2 id="focused-role-title">{job.title}</h2>
+        <div className="role-detail-meta">{job.cityLabel && <span className="role-detail-location"><JobMetaIcon name="location" />{job.cityLabel}</span>}<span className="role-detail-work-mode"><JobMetaIcon name="work" />{job.workPreference}</span><span><JobMetaIcon name="date" />{job.freshnessLabel}</span></div>
+        <div className="role-detail-fit"><strong>{matchLabel(job.matchScore, job.isRelatedMatch, job.matchSource)}</strong><p>{job.fitSummary}</p></div>
+        <section className="role-detail-section"><h3>Why it fits</h3><ul>{fitPoints.map((point) => <li key={point}>{point}</li>)}</ul></section>
+        {job.cautions.length > 0 && <section className="role-detail-section"><h3>Worth noting</h3><ul className="role-detail-cautions">{job.cautions.slice(0, 3).map((caution) => <li key={caution}>{caution}</li>)}</ul></section>}
+        {job.requirements.length > 0 && <section className="role-detail-section"><h3>What they’re looking for</h3><ul>{job.requirements.slice(0, 6).map((requirement) => <li key={requirement}>{requirement}</li>)}</ul></section>}
+        <section className="role-detail-section"><h3>People you know</h3>{matchingConnections.length > 0 ? <div className="role-detail-connection-row"><span><strong>{matchingConnections.length} connection{matchingConnections.length === 1 ? '' : 's'} work here</strong><small>From your uploaded LinkedIn connections</small></span><button className="role-detail-link" onClick={onOpenConnections} type="button">View connections</button></div> : <p>No imported connections found at this company.</p>}</section>
+        <section className="role-detail-section"><h3>Prepare your application</h3><div className="role-detail-resume-row"><span><strong>Primary Resume</strong><small>{savedResume ? 'Use AI to tailor it from your verified experience.' : 'Upload your resume to tailor it for this role.'}</small></span><button className="role-detail-secondary" disabled={tailoringJobId === job.id || !savedResume} onClick={() => void previewTailoring()} type="button">Tailor resume with AI</button></div>{tailoringPreview && <div className="role-detail-tailor-status"><strong>Preview ready: {tailoringPreview.result.preview.projectedScore}% estimated match</strong><button className="role-detail-secondary" disabled={tailoringJobId === job.id} onClick={() => void generateTailoredFile()} type="button">Generate {resumeFormat.toUpperCase()}</button></div>}{tailorMessage && <p className={tailorMessage.tone === 'error' ? 'role-detail-message error' : 'role-detail-message'} role={tailorMessage.tone === 'error' ? 'alert' : 'status'}>{tailorMessage.text}</p>}</section>
+        <details className="role-detail-original"><summary>Open original job description <span>↓</span></summary><FormattedJobDescription fallback={job.description} html={job.descriptionHtml} /></details>
+        <div className="role-detail-actions"><a className="role-detail-primary" href={job.applyUrl} onClick={() => void onSave(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply on company site <span>↗</span></a><button className="role-detail-secondary" disabled={isSaving} onClick={() => void saveStatus(job.id, 'On Hold')} type="button">Save for later</button><button className="role-detail-quiet" disabled={isSaving} onClick={() => void saveStatus(job.id, 'Reject')} type="button">Not interested</button></div>
+      </aside>
+    </div>
   </WorkspaceFrame>
 }
 
@@ -241,19 +230,19 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
 
   const search = brief.search
   const cards = brief.suggestions.map((suggestion) => toLiveJobCard({ ...suggestion, job: suggestion.job ? { ...suggestion.job, _id: String(suggestion.job._id) } : null })).filter((job): job is NonNullable<typeof job> => job !== null)
-  const jobs = getUndecidedJobs(cards, savedActions)
-  const sourceFailures = brief.sourceHealth.filter((source) => source.status === 'failed')
-  const checkedAt = search?.completedAt ? new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(search.completedAt)) : 'Results arrive within 15 minutes'
-
-  if (focusedJob) return <FocusedRoleView embedded={embedded} isSaving={savingJobId === focusedJob.id} job={focusedJob} onBack={() => setFocusedJob(null)} onSave={saveStatus} />
+  const jobs = getUndecidedJobs(cards, savedActions).sort((first, second) => {
+    if (first.isRelatedMatch !== second.isRelatedMatch) return Number(first.isRelatedMatch) - Number(second.isRelatedMatch)
+    return second.matchScore - first.matchScore
+  })
+  const strongFitCount = jobs.filter((job) => !job.isRelatedMatch && job.matchScore >= 80).length
 
   return <WorkspaceFrame embedded={embedded}>
     {!embedded && <BriefSidebar jobCount={jobs.length} onBack={onBack} onEditPreferences={onEditPreferences} onOpenConnections={onOpenConnections} onOpenTracker={onOpenTracker} />}
     <section aria-labelledby="results-heading" className="brief-canvas">
-      <header className="brief-workspace-header">
-        <div><p className="eyebrow">TODAY’S LIVE JOBS</p><h1 id="results-heading">Your next move,<br /><em>in view.</em></h1><p>Fresh roles from approved company career pages, shaped around your preferences.</p></div>
-        <div className="brief-workspace-signal"><span aria-hidden="true">●</span><p><strong>{search?.completedAt ? 'Greenhouse checked' : 'Live search'}</strong><small>{checkedAt}</small></p></div>
-      </header>
+      <section className="cpd-intro" aria-labelledby="results-heading">
+        <div><span className="cpd-eyebrow">YOUR DAILY BRIEF</span><h1 id="results-heading">Your Daily Brief is <span>ready.</span></h1><p>Start with the roles that fit best, understand the tradeoffs, then choose one clear next action.</p></div>
+        <div className="cpd-brief-count"><strong>{jobs.length}</strong><span>roles worth your attention</span></div>
+      </section>
 
       {!search ? <section className="workspace-empty"><p className="eyebrow">READY TO SEARCH</p><h2>Build your first live job brief.</h2><p>Once your resume and preferences are saved, we will check approved company sources and keep the results private to you.</p><button className="workspace-primary" disabled={isStartingSearch} onClick={() => void startSearch()} type="button">{isStartingSearch ? 'Starting search…' : 'Find my jobs'} <span aria-hidden="true">→</span></button></section>
         : search.status === 'queued' || search.status === 'fetching' || search.status === 'matching' ? <section aria-live="polite" className="workspace-empty"><p className="eyebrow">LIVE SEARCH RUNNING</p><h2>Checking active roles for you.</h2><p>We are reading approved company job boards, removing older listings, and matching what remains to your preferences. This can take up to 15 minutes.</p></section>
@@ -261,25 +250,33 @@ export function ResultsScreen({ embedded = false, onBack, onEditPreferences, onO
             : jobs.length === 0 ? (savedActions.length > 0 && cards.length > 0 ? <section className="workspace-empty"><p className="eyebrow">ALL CAUGHT UP</p><h2>You have decided on every job in this brief.</h2><p>Your choices are waiting in Tracker. We will not show the same roles here again.</p><button className="workspace-primary" onClick={onOpenTracker} type="button">Open Tracker <span aria-hidden="true">→</span></button></section> : <section className="workspace-empty"><p className="eyebrow">NO MATCHES YET</p><h2>No live roles match this brief right now.</h2><p>Try widening your target role, city, or work preference. We will not fill this space with unrelated jobs.</p><button className="workspace-primary" onClick={onEditPreferences} type="button">Edit preferences <span aria-hidden="true">→</span></button></section>)
               : <>
                 {search.sourceWarning && <p className="workspace-source-warning" role="status">{search.sourceWarning}</p>}
-                {sourceFailures.length > 0 && !search.sourceWarning && <p className="workspace-source-warning" role="status">{sourceFailures.length} source{sourceFailures.length === 1 ? ' is' : 's are'} temporarily unavailable. These results use the other approved sources.</p>}
+                <aside className="cpd-sherpa-brief"><span aria-hidden="true" className="cpd-sherpa-mark">S</span><div><strong>{strongFitCount} strong fit{strongFitCount === 1 ? '' : 's'} stand out today.</strong><p>These roles are ordered by the evidence already in your resume and the preferences you set. Start with the strongest match for your next clear action.</p></div></aside>
                 <div className="brief-workspace-summary"><p><b>{jobs.length}</b> roles ready to review</p><span>Strongest matches first</span></div>
-                <div className="job-tile-grid">
-                  {jobs.map((job, index) => {
+                <div className="cpd-job-list">
+                  {jobs.map((job) => {
                     const isSaving = savingJobId === job.id
                     const matchingConnections = findCompanyConnections(job.companyName, savedConnections.connections)
-                    return <article className={index === 0 ? 'job-tile top-pick' : 'job-tile'} key={job.id}>
-                      <div className="job-tile-topline"><p>{index === 0 ? 'FIRST TO OPEN' : 'ROLE ' + String(index + 1).padStart(2, '0')}</p><div className="job-tile-score"><strong>{job.matchScore}</strong><span>{matchLabel(job.matchScore, job.isRelatedMatch, job.matchSource)}</span></div></div>
-                      <div className="job-tile-company"><div aria-hidden="true" className="workspace-company-mark">{job.companyName.slice(0, 1)}</div><div><h2>{job.title}</h2><p>{job.companyName}</p></div></div>
-                      <div className="job-tile-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span></div>
-                      <p className="job-tile-reason"><b>Why it fits</b> {job.matchReason}</p>
-                      {matchingConnections.length > 0 && <section className="job-tile-connections"><p><b>Connections at {job.companyName}</b></p><div>{matchingConnections.slice(0, 2).map((connection) => connection.profileUrl ? <a href={connection.profileUrl} key={connection.profileUrl + connection.firstName + connection.lastName} rel="noreferrer" target="_blank"><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')} <i aria-hidden="true">↗</i></a> : <span className="workspace-connection-name" key={connection.firstName + connection.lastName + connection.company}><span aria-hidden="true">{connection.firstName.slice(0, 1) + connection.lastName.slice(0, 1) || '•'}</span>{[connection.firstName, connection.lastName].filter(Boolean).join(' ')}</span>)}</div>{matchingConnections.length > 2 && <small>+{matchingConnections.length - 2} more in details</small>}</section>}
-                      <section className="job-tile-summary"><p className="role-detail-label">Role summary</p><p>{createRoleBrief(job.description).summary ?? 'Open the role view for a structured summary and the full original description.'}</p><button onClick={() => setFocusedJob(job)} type="button">Open full role view <span aria-hidden="true">→</span></button></section>
-                      <footer className="job-tile-footer"><div><p>{job.freshnessLabel}</p><small>{job.checkedLabel}</small></div><div className="job-tile-actions"><a aria-disabled={isSaving} className="workspace-apply" href={job.applyUrl} onClick={() => void saveStatus(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply <span aria-hidden="true">↗</span></a><button disabled={isSaving} onClick={() => void saveStatus(job.id, 'On Hold')} type="button">Hold</button><button className="reject" disabled={isSaving} onClick={() => void saveStatus(job.id, 'Reject')} type="button">Reject</button></div></footer>
-                    </article>
+                    const match = matchLabel(job.matchScore, job.isRelatedMatch)
+                  return <article className="cpd-job" key={job.id}>
+                    <div className="cpd-job-main">
+                      <span aria-hidden="true" className="cpd-company-mark">{companyMarkFromName(job.companyName)}</span>
+                      <div>
+                        <div className="cpd-job-title-row"><h3>{job.title}</h3><span className="cpd-match" data-fit={match}>{match}</span></div>
+                        <p className="cpd-company-line">{job.companyName}</p>
+                        <div className="cpd-meta">{job.cityLabel && <span className="role-detail-location"><JobMetaIcon name="location" />{job.cityLabel}</span>}<span className="role-detail-work-mode"><JobMetaIcon name="work" />{job.workPreference}</span><span className="role-detail-date"><JobMetaIcon name="date" />{job.freshnessLabel}</span>{matchingConnections.length > 0 && <span>{matchingConnections.length} connection{matchingConnections.length === 1 ? '' : 's'}</span>}</div>
+                      </div>
+                    </div>
+                    <div className="cpd-job-fit">
+                      <strong>WHY IT FITS</strong>
+                      <p>{job.fitSummary}</p>
+                    </div>
+                    <div className="cpd-job-actions"><button className="cpd-primary-button" onClick={() => setFocusedJob(job)} type="button">View details</button><button className="cpd-quiet-button cpd-danger" disabled={isSaving} onClick={() => void saveStatus(job.id, 'Reject')} type="button">Not interested</button></div>
+                  </article>
                   })}
                 </div>
               </>}
       {actionError && <p className="field-error workspace-error" role="alert">{actionError}</p>}
     </section>
+    {focusedJob && <FocusedRoleView embedded={embedded} isSaving={savingJobId === focusedJob.id} job={focusedJob} onBack={() => setFocusedJob(null)} onOpenConnections={onOpenConnections} onSave={saveStatus} />}
   </WorkspaceFrame>
 }

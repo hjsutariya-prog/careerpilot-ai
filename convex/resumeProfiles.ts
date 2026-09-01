@@ -3,8 +3,10 @@ import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireOwner } from './owner'
 import type { Id } from './_generated/dataModel'
-import { requestGeminiText } from './gemini'
+import { isGeminiRequestError, requestGeminiText } from './gemini'
+import { resumeProfileGeminiConfig } from './ai/resumeMatchingGeminiConfig'
 import { selectLatestTemplateResume } from './resumeRecords'
+import { jsonrepair } from 'jsonrepair'
 
 export const PROFILE_SCHEMA_VERSION = 1
 
@@ -15,6 +17,52 @@ export type ResumeProfile = {
   education: { text: string; evidenceLineNumbers: number[] }[]
   totalYears: number
 }
+
+/** Gemini is constrained to the same factual shape that parseResumeProfile accepts. */
+export const resumeProfileResponseSchema = {
+  type: 'object',
+  properties: {
+    skills: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { name: { type: 'string' }, evidenceLineNumbers: { type: 'array', items: { type: 'integer' } } },
+        required: ['name', 'evidenceLineNumbers'],
+        additionalProperties: false,
+      },
+    },
+    roles: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { title: { type: 'string' }, years: { type: 'number' }, evidenceLineNumbers: { type: 'array', items: { type: 'integer' } } },
+        required: ['title', 'years', 'evidenceLineNumbers'],
+        additionalProperties: false,
+      },
+    },
+    achievements: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { text: { type: 'string' }, evidenceLineNumbers: { type: 'array', items: { type: 'integer' } } },
+        required: ['text', 'evidenceLineNumbers'],
+        additionalProperties: false,
+      },
+    },
+    education: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { text: { type: 'string' }, evidenceLineNumbers: { type: 'array', items: { type: 'integer' } } },
+        required: ['text', 'evidenceLineNumbers'],
+        additionalProperties: false,
+      },
+    },
+    totalYears: { type: 'number' },
+  },
+  required: ['skills', 'roles', 'achievements', 'education', 'totalYears'],
+  additionalProperties: false,
+} as const
 
 export function normaliseResumeLines(text: string) {
   return text.split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean)
@@ -82,7 +130,20 @@ function profilePrompt(lines: string[]) {
 function jsonFromText(text: string) {
   const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
   const json = trimmed.match(/\{[\s\S]*\}/)?.[0] ?? trimmed
-  try { return JSON.parse(json) } catch { return null }
+  try { return JSON.parse(json) } catch {
+    try { return JSON.parse(jsonrepair(json)) } catch { return null }
+  }
+}
+
+function profileResponseDiagnostic(text: string, parsed: unknown) {
+  const record = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+  return {
+    responseLength: text.length,
+    parsedJson: Boolean(record),
+    keys: record ? Object.keys(record).sort().slice(0, 8) : [],
+    skillsCount: Array.isArray(record?.skills) ? record.skills.length : undefined,
+    rolesCount: Array.isArray(record?.roles) ? record.roles.length : undefined,
+  }
 }
 
 export const resumeForProfile = internalQuery({
@@ -150,12 +211,20 @@ export const ensureForResume = internalAction({
     await ctx.runMutation(internal.resumeProfiles.markGenerating, { profileId })
     try {
       const lines = normaliseResumeLines(resume.extractedText)
-      const text = await requestGeminiText({ model: 'gemini-3.6-flash', prompt: profilePrompt(lines), thinkingLevel: 'medium', maxOutputTokens: 2800, timeoutMs: 30_000 })
-      const profile = parseResumeProfile(jsonFromText(text), lines.length)
-      if (!profile) throw new Error('unsafe profile')
+      const text = await requestGeminiText({ ...resumeProfileGeminiConfig, prompt: profilePrompt(lines), schema: resumeProfileResponseSchema })
+      const parsed = jsonFromText(text)
+      const profile = parseResumeProfile(parsed, lines.length)
+      if (!profile) {
+        console.warn('Resume profile response did not meet the factual profile contract.', { resumeId: String(args.resumeId), ...profileResponseDiagnostic(text, parsed) })
+        throw new Error('unsafe profile')
+      }
       await ctx.runMutation(internal.resumeProfiles.finish, { profileId, profile })
       return { status: 'ready' as const, profileId }
-    } catch {
+    } catch (error) {
+      const failure = isGeminiRequestError(error)
+        ? { code: error.code, httpStatus: error.options.httpStatus, retryAfterSeconds: error.options.retryAfterSeconds }
+        : { code: 'PROFILE_RESPONSE_INVALID' }
+      console.warn('Resume profile generation failed.', { resumeId: String(args.resumeId), failure })
       await ctx.runMutation(internal.resumeProfiles.finish, { profileId, failureMessage: 'We could not analyse this resume. Please try again after re-uploading it.' })
       return { status: 'failed' as const }
     }

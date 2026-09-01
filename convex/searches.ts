@@ -10,6 +10,7 @@ export type SuggestionInput = {
   matchScore: number;
   matchExplanation: string;
   isRelatedMatch: boolean;
+  preferenceAlignment?: { location: 'aligned' | 'mismatch' | 'not_set'; workStyle: 'aligned' | 'mismatch' | 'not_set'; salary: 'unknown' };
 };
 
 export function dedupeSuggestionInputs<T extends SuggestionInput>(suggestions: readonly T[]) {
@@ -32,6 +33,11 @@ const suggestionValidator = v.object({
   matchScore: v.number(),
   matchExplanation: v.string(),
   isRelatedMatch: v.boolean(),
+  preferenceAlignment: v.optional(v.object({
+    location: v.union(v.literal('aligned'), v.literal('mismatch'), v.literal('not_set')),
+    workStyle: v.union(v.literal('aligned'), v.literal('mismatch'), v.literal('not_set')),
+    salary: v.literal('unknown'),
+  })),
 });
 
 export const latestMine = query({
@@ -284,7 +290,7 @@ export const runSearch = internalAction({
     await ctx.runMutation(internal.searches.saveSuggestions, {
       ownerId: searchRun.ownerId,
       searchRunId: args.searchRunId,
-      suggestions: suggestions.map((suggestion) => ({ jobId: jobsById.get(suggestion.id)!, rank: suggestion.rank, matchScore: suggestion.matchScore, matchExplanation: suggestion.matchExplanation, isRelatedMatch: suggestion.isRelatedMatch })),
+      suggestions: suggestions.map((suggestion) => ({ jobId: jobsById.get(suggestion.id)!, rank: suggestion.rank, matchScore: suggestion.matchScore, matchExplanation: suggestion.matchExplanation, isRelatedMatch: suggestion.isRelatedMatch, preferenceAlignment: suggestion.preferenceAlignment })),
       sourceWarning,
     });
     const matching = await ctx.runAction(internal.resumeMatching.matchSearchRun, { searchRunId: args.searchRunId });

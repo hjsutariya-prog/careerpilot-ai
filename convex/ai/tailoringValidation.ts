@@ -190,8 +190,8 @@ export function preservesMaterialContent(source: string, replacement: string) {
 }
 
 function isWithinExperienceLengthLimit(source: string, replacement: string) {
-  return replacement.length <= Math.ceil(source.length * 1.1)
-    && wordCount(replacement) <= Math.ceil(wordCount(source) * 1.1)
+  return replacement.length <= Math.ceil(source.length * 1.2)
+    && wordCount(replacement) <= Math.ceil(wordCount(source) * 1.2)
 }
 
 export function isSafeExperienceRewrite(source: string, replacement: string) {
@@ -404,7 +404,7 @@ export function validateTailoringResponse(input: TailoringValidationInput): Tail
       continue
     }
     nonEmpty += 1
-    if (isSkillSlot(slot.text) ? text.length <= slot.text.length : text.length < slot.text.length) withinLength += 1
+    if (isSkillSlot(slot.text) ? text.length <= slot.text.length : isWithinExperienceLengthLimit(slot.text, text)) withinLength += 1
     const safetyReason = resolvedMasterSources.blocks.length
       ? masterBackedRewriteReason(slot.text, text, resolvedMasterSources.blocks)
       : isSafeTemplateReplacement(slot.text, text) ? null : rejectionReason(slot.text, text)

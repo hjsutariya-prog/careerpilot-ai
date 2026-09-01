@@ -156,7 +156,7 @@ export function masterBackedRewriteReason(templateText: string, replacement: str
   const masterText = masterBlocks.map((block) => block.text).join('\n')
   const combinedEvidence = `${templateText}\n${masterText}`
   if (!preservesActionTense(templateText, replacement)) return 'changed_action_tense'
-  if (replacement.length > Math.ceil(templateText.length * 1.1) || wordsCount(replacement) > Math.ceil(wordsCount(templateText) * 1.1)) return 'replacement_too_long'
+  if (replacement.length > Math.ceil(templateText.length * 1.2) || wordsCount(replacement) > Math.ceil(wordsCount(templateText) * 1.2)) return 'replacement_too_long'
   if (!hasAllValues(valuesIn(templateText), valuesIn(replacement))) return 'changed_number'
   if (!hasAllValues(valuesIn(replacement), valuesIn(combinedEvidence))) return 'unsupported_master_number'
   if (!hasAllValues(acronymsIn(templateText), acronymsIn(replacement))) return 'changed_acronym'

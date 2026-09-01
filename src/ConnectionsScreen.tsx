@@ -10,8 +10,19 @@ function formatImportDate(value: number) {
   return new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 }
 
+function companyMarkFromName(companyName: string) {
+  const words = companyName.match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z]|$)/g) ?? [companyName]
+  return words.length > 1 ? words.map((word) => word[0]).join('').slice(0, 2).toUpperCase() : companyName.replace(/[^a-z]/gi, '').slice(0, 2).toUpperCase()
+}
+
+function ConnectionsCsvHelp() {
+  return <details className="cpd-csv-help"><summary>How to download your LinkedIn connections export</summary><p>In LinkedIn, open Settings &amp; Privacy, choose Data privacy, then Get a copy of your data. Request the Connections file.</p></details>
+}
+
 export function ConnectionsScreen({ embedded = false, onBack }: { embedded?: boolean; onBack: () => void }) {
   const savedConnections = useQuery(api.connections.mine)
+  const latestBrief = useQuery(api.searches.latestMine)
+  const trackedJobs = useQuery(api.searches.trackedJobsMine)
   const startImport = useMutation(api.connections.startImport)
   const saveBatch = useMutation(api.connections.saveBatch)
   const finishImport = useMutation(api.connections.finishImport)
@@ -74,6 +85,27 @@ export function ConnectionsScreen({ embedded = false, onBack }: { embedded?: boo
   const currentConnections = savedConnections?.connections ?? []
   const previewRows = preview?.validConnections.slice(0, 3) ?? []
   const previewErrors = preview?.errors.slice(0, 5) ?? []
+  const briefJobs = (latestBrief?.suggestions ?? []).flatMap((suggestion) => suggestion.job ? [{ suggestion, job: suggestion.job }] : [])
+  const matchedJobSources = [...briefJobs.map((item) => ({ job: item.job, score: item.suggestion.matchScore as number | null })), ...(trackedJobs ?? []).map((item) => ({ job: item.job, score: null }))]
+  const matchedCompanyGroups = Array.from(matchedJobSources.reduce((groups, item) => {
+    const key = item.job.normalizedCompany
+    if (groups.has(key)) return groups
+    const people = currentConnections.filter((connection) => connection.normalizedCompany === key)
+    if (people.length > 0) groups.set(key, { company: item.job.companyName, title: item.job.title, score: item.score, people })
+    return groups
+  }, new Map<string, { company: string; title: string; score: number | null; people: typeof currentConnections }>()).values())
+
+  if (embedded) return <main className="connections-shell dashboard-connections-shell">
+    <section aria-labelledby="connections-heading" className="cpd-connections-page">
+      <div className="cpd-page-head"><div><span className="cpd-eyebrow">LINKEDIN CONNECTIONS</span><h1 id="connections-heading">Useful context at <span>matched companies.</span></h1><p>CareerPilot matches your uploaded Direct Connection contacts to companies in your Daily Brief. You decide whether and how to reach out.</p></div></div>
+      <div className="cpd-connections-summary"><div><strong>{currentImport ? `${currentConnections.length.toLocaleString('en-IN')} connections imported` : 'No LinkedIn connections imported yet'}</strong><p>{currentImport ? `${currentImport.fileName} · Updated ${formatImportDate(currentImport.importedAt)} · CareerPilot does not sign in to LinkedIn or message anyone.` : 'Upload your LinkedIn Connections CSV to see useful company context here.'}</p></div><label className="cpd-secondary-button"><input accept=".csv,text/csv" disabled={isSaving} onChange={(event) => void chooseFile(event)} type="file" />{isSaving ? 'Saving…' : 'Replace CSV'}</label></div>
+      <ConnectionsCsvHelp />
+      {preview && <section className="cpd-connections-preview" aria-live="polite"><strong>{preview.validConnections.length.toLocaleString('en-IN')} connections ready to save</strong><span>{preview.errors.length} row{preview.errors.length === 1 ? '' : 's'} need attention</span><button className="cpd-primary-button" disabled={isSaving || preview.validConnections.length === 0} onClick={() => void saveConnections()} type="button">Save connections</button></section>}
+      {message && <p className="cpd-resume-message" role="status">{message}</p>}
+      <div className="cpd-section-title"><div><h2>Connections at matched companies</h2><p>Shown only where they can add useful company or team context.</p></div></div>
+      {matchedCompanyGroups.length > 0 ? <div className="cpd-company-connections-list">{matchedCompanyGroups.map(({ company, title, score, people }) => <details className="cpd-company-connections" key={company}><summary className="cpd-company-toggle"><span className="cpd-company-mark">{companyMarkFromName(company)}</span><span><strong>{company}</strong><small>{title} · {score === null ? 'In tracker' : score >= 80 ? 'Strong fit' : score >= 65 ? 'Good fit' : 'Stretch'}</small></span><span>{people.length} connection{people.length === 1 ? '' : 's'}</span><svg aria-hidden="true" className="cpd-company-chevron" fill="none" height="18" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" width="18"><path d="m6 9 6 6 6-6" /></svg></summary><div className="cpd-people-list">{people.map((person) => <div className="cpd-person-row" key={`${person.profileUrl}-${person.firstName}`}><span className="cpd-connection-avatar">{`${person.firstName.slice(0, 1)}${person.lastName.slice(0, 1)}`}</span><span><strong><a href={person.profileUrl} rel="noreferrer" target="_blank">{[person.firstName, person.lastName].filter(Boolean).join(' ')}<span aria-hidden="true"> ↗</span></a></strong><small>{person.position || 'Position not listed'}</small></span></div>)}</div></details>)}</div> : <section className="cpd-empty"><h3>No matched company connections yet.</h3><p>Connections appear here when an imported person works at a company in your Daily Brief or Tracker.</p></section>}
+    </section>
+  </main>
 
   return (
     <main className={embedded ? 'connections-shell dashboard-connections-shell' : 'connections-shell'}>
@@ -86,7 +118,7 @@ export function ConnectionsScreen({ embedded = false, onBack }: { embedded?: boo
         <div className="connections-heading"><div><p className="eyebrow">YOUR CONNECTIONS</p><h1 id="connections-heading">Your network,<br /><em>where it matters.</em></h1><p>Import your LinkedIn Connections file. CareerPilot only looks for people whose current company matches a role in your brief.</p></div>{currentImport && <p className="connections-saved-count"><b>{currentConnections.length.toLocaleString('en-IN')}</b> connections<br />saved {formatImportDate(currentImport.importedAt)}</p>}</div>
 
         <section className="connections-upload" aria-labelledby="connections-upload-heading">
-          <div className="connections-upload-copy"><p className="eyebrow">LINKEDIN CSV</p><h2 id="connections-upload-heading">Bring in your current network.</h2><p>Download your LinkedIn <b>Connections</b> CSV, then choose it here. We do not send messages or post anything on your behalf.</p><p className="connections-format">Needs: name, profile URL, company, position, and connection date.</p></div>
+          <div className="connections-upload-copy"><p className="eyebrow">LINKEDIN CSV</p><h2 id="connections-upload-heading">Bring in your current network.</h2><p>Download your LinkedIn <b>Connections</b> CSV, then choose it here. We do not send messages or post anything on your behalf.</p><p className="connections-format">Needs: name, profile URL, company, position, and connection date.</p><ConnectionsCsvHelp /></div>
           <label className="connections-drop">
             <input accept=".csv,text/csv" disabled={isSaving} onChange={(event) => void chooseFile(event)} type="file" />
             <span aria-hidden="true">↥</span><strong>{isSaving ? 'Saving connections…' : preview ? fileName : 'Choose LinkedIn CSV'}</strong><small>CSV only · Up to 5 MB · Preview before saving</small>

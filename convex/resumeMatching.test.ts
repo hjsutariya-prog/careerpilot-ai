@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { matchCacheKey, scoreResumeMatch } from './resumeMatching'
+import { batchMatchResponseSchema, matchCacheKey, scoreResumeMatch } from './resumeMatching'
 
 describe('scoreResumeMatch', () => {
   it('uses the agreed 40/30/20/8/2 formula', () => {
@@ -33,5 +33,12 @@ describe('matchCacheKey', () => {
   it('is stable for an unchanged resume and job', () => {
     expect(matchCacheKey({ sourceHash: 'same-resume', jobId: 'job-a', jobLastUpdatedAt: 9, scoreVersion: 1 }))
       .toBe(matchCacheKey({ sourceHash: 'same-resume', jobId: 'job-a', jobLastUpdatedAt: 9, scoreVersion: 1 }))
+  })
+})
+
+describe('batch matching contract', () => {
+  it('requires each AI match to cite its structured professional evidence shape', () => {
+    expect(batchMatchResponseSchema.required).toEqual(['matches'])
+    expect(batchMatchResponseSchema.properties.matches).toBeDefined()
   })
 })

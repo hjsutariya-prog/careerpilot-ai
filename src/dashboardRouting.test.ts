@@ -6,9 +6,9 @@ describe('getDashboardStartScreen', () => {
     expect(getDashboardStartScreen(true, true)).toBe('apply')
   })
 
-  it('opens Resume when setup is incomplete', () => {
-    expect(getDashboardStartScreen(false, true)).toBe('resume')
-    expect(getDashboardStartScreen(true, false)).toBe('resume')
-    expect(getDashboardStartScreen(false, false)).toBe('resume')
+  it('opens onboarding when setup is incomplete', () => {
+    expect(getDashboardStartScreen(false, true)).toBe('onboarding')
+    expect(getDashboardStartScreen(true, false)).toBe('onboarding')
+    expect(getDashboardStartScreen(false, false)).toBe('onboarding')
   })
 })

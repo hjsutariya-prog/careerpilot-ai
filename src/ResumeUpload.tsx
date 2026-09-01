@@ -1,30 +1,12 @@
 import { useEffect, useState, type ChangeEvent } from 'react'
 import { useMutation, useQuery } from 'convex/react'
 import { api } from '../convex/_generated/api'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { detectResumeSkills } from './resumeSkills'
 import { sha256Text } from './resumeFingerprint'
+import { extractReadableResumeText, isSupportedResume, MAX_RESUME_BYTES } from './resumeUploadUtils'
 
-const MAX_BYTES = 10 * 1024 * 1024
-const allowed = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
 type ResumePurpose = 'template' | 'master'
 type UploadedFile = { name: string; size: number }
-
-async function readableText(file: File) {
-  if (file.type === 'application/pdf') {
-    const pdfjs = await import('pdfjs-dist')
-    pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
-    const document = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
-    let text = ''
-    for (let page = 1; page <= document.numPages; page += 1) {
-      const content = await document.getPage(page).then((value) => value.getTextContent())
-      text += content.items.map((item) => 'str' in item ? item.str : '').join(' ')
-    }
-    return text.trim()
-  }
-  const mammoth = await import('mammoth/mammoth.browser')
-  return (await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value.trim()
-}
 
 export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedded?: boolean; onBack: () => void; onContinue: () => void }) {
   const generateUploadUrl = useMutation(api.resumes.generateUploadUrl)
@@ -49,12 +31,12 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
     const file = event.target.files?.[0]
     if (!file) return
     const setStatus = purpose === 'master' ? setMasterMessage : setMessage
-    if (!allowed.has(file.type)) return setStatus('Upload a PDF or DOCX file only.')
+    if (!isSupportedResume(file)) return setStatus('Upload a PDF or DOCX file only.')
     if (file.size === 0) return setStatus('This file is empty. Choose a resume with content.')
-    if (file.size > MAX_BYTES) return setStatus('This file is larger than 10 MB. Choose a smaller resume.')
+    if (file.size > MAX_RESUME_BYTES) return setStatus('This file is larger than 10 MB. Choose a smaller resume.')
     setBusyPurpose(purpose); setStatus('Checking that we can read your resume…')
     try {
-      const text = await readableText(file)
+      const text = await extractReadableResumeText(file)
       if (text.length < 40) throw new Error('Your resume has no readable text. Export it again as a text-based PDF or DOCX.')
       const detectedSkills = detectResumeSkills(text)
       const contentHash = await sha256Text(text)
@@ -108,7 +90,25 @@ export function ResumeUpload({ embedded = false, onBack, onContinue }: { embedde
   const templateBusy = busyPurpose === 'template'
   const masterBusy = busyPurpose === 'master'
 
-  return <main className={embedded ? 'resume-shell dashboard-resume-shell' : 'resume-shell'}>
+  if (embedded) return <main className="resume-shell dashboard-resume-shell">
+    <section aria-labelledby="resume-heading" className="cpd-resume-page">
+      <div className="cpd-page-head"><div><span className="cpd-eyebrow">RESUME WORKSPACE</span><h1 id="resume-heading">Your experience, ready for <span>each strong role.</span></h1><p>Keep one trusted Primary Resume, add a fuller Master Resume, and review every AI-tailored version before using it.</p></div><div className="cpd-page-actions"><button className="cpd-primary-button" onClick={onContinue} type="button"><span aria-hidden="true">✦</span>Create tailored resume</button></div></div>
+      <div className="cpd-resume-overview">
+        <article className="cpd-resume-source cpd-resume-source-primary"><div><div className="cpd-source-label"><strong>Primary Resume</strong><small>DEFAULT FORMAT</small></div><p>Your main resume and preferred application format.</p><span className="cpd-file-reference"><span aria-hidden="true">✓</span>{displayFile ? `${displayFile.name} · Updated today` : 'No Primary Resume uploaded yet'}</span></div><label className="cpd-secondary-button"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Replace Primary Resume" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'template')} type="file" />{templateBusy ? 'Uploading…' : 'Replace'}</label></article>
+        <article className="cpd-resume-source"><div><div className="cpd-source-label"><strong>Master Resume</strong><small>OPTIONAL SOURCE</small></div><p>A fuller record of verified roles, projects, achievements and skills.</p><span className="cpd-file-reference"><span aria-hidden="true">✓</span>{displayMasterFile ? `${displayMasterFile.name} · Updated ${savedMasterResume ? new Date(savedMasterResume.uploadedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : 'today'}` : 'No Master Resume uploaded yet'}</span></div><label className="cpd-secondary-button"><input accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" aria-label="Update Master Resume" disabled={busyPurpose !== null} onChange={(event) => void upload(event, 'master')} type="file" />{masterBusy ? 'Uploading…' : displayMasterFile ? 'Update' : 'Add resume'}</label></article>
+      </div>
+      {(message || masterMessage) && <p className="cpd-resume-message" role="status">{message || masterMessage}</p>}
+      <p className="cpd-grounded-note"><span aria-hidden="true">✓</span><span>AI tailoring uses only the source material in these resumes. You review every change before using it.</span></p>
+      <div className="cpd-section-title"><div><h2>Tailored applications</h2><p>Role-specific versions created from your trusted resume content.</p></div></div>
+      <div className="cpd-tailored-list">
+        <div className="cpd-tailored-row"><span><strong>Product Manager · Arcesium</strong><small>Based on Primary + Master Resume</small></span><span><small>Created today</small></span><span className="cpd-resume-status" data-resume-status="Ready to review">Ready to review</span><button className="cpd-row-view" type="button">Review</button></div>
+        <div className="cpd-tailored-row"><span><strong>Senior Product Manager · Razorpay</strong><small>Based on Primary + Master Resume</small></span><span><small>Created yesterday</small></span><span className="cpd-resume-status" data-resume-status="Draft">Draft</span><button className="cpd-row-view" type="button">Review</button></div>
+        <div className="cpd-tailored-row"><span><strong>Platform Product Manager · Juspay</strong><small>Created from verified source material</small></span><span><small>Created 29 Aug</small></span><span className="cpd-resume-status" data-resume-status="Used for application">Used for application</span><button className="cpd-row-view" type="button">View</button></div>
+      </div>
+    </section>
+  </main>
+
+  return <main className="resume-shell">
     {!embedded && <header className="preference-topbar resume-topbar">
       <button className="back-home" onClick={onBack} type="button">← Home</button>
       <span className="brand">CareerPilot<span>.AI</span></span>

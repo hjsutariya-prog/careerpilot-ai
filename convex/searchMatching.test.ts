@@ -24,4 +24,10 @@ describe("getLiveSuggestions", () => {
     const anotherIndiaCity = { ...jobs[0], id: "job-c", cities: ["Pune"], locationLabel: "Pune, India" };
     expect(getLiveSuggestions(preferences, [anotherIndiaCity])).toHaveLength(1);
   });
+
+  it('does not use location or work style as positive Why it fits copy', () => {
+    const [suggestion] = getLiveSuggestions(preferences, jobs)
+    expect(suggestion?.matchExplanation).toBe('Professional resume evidence is being prepared.')
+    expect(suggestion?.preferenceAlignment).toEqual({ location: 'aligned', workStyle: 'aligned', salary: 'unknown' })
+  })
 });

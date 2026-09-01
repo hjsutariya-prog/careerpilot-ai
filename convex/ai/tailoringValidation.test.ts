@@ -68,16 +68,16 @@ describe('tailoring semantic validation', () => {
     expect(result.rejectedEdits[0]?.reason).toBe('material_content_removed')
   })
 
-  it('accepts same-length and up-to-110% safe experience rewording', () => {
+  it('accepts same-length and up-to-120% safe experience rewording', () => {
     expect(isSafeExperienceRewrite('Led sprint planning.', 'Ran sprint planning.')).toBe(true)
-    expect(isSafeExperienceRewrite('Built React dashboards.', 'Created React dashboards.')).toBe(true)
+    expect(isSafeExperienceRewrite('Built React dashboards.', 'Developed React dashboards.')).toBe(true)
   })
 
   it('rejects replacements over the character or word length limit', () => {
-    const overCharacters = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built React dashboards for many internal business teams.' }]), editableSlots })
+    const overCharacters = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built React dashboards for many internal business teams across global operations.' }]), editableSlots })
     expect(overCharacters.rejectedEdits[0]?.reason).toBe('replacement_too_long')
     const source = 'Built comprehensive internationalization architecture supporting global enterprise applications.'
-    const overWords = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built comprehensive internationalization architecture supporting global enterprise applications now go.' }]), editableSlots: createResumeBlocks([{ text: source, editable: true }]) })
+    const overWords = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Built comprehensive internationalization architecture supporting global enterprise applications across many large global business teams.' }]), editableSlots: createResumeBlocks([{ text: source, editable: true }]) })
     expect(overWords.rejectedEdits[0]?.reason).toBe('replacement_too_long')
   })
 
@@ -85,7 +85,7 @@ describe('tailoring semantic validation', () => {
     const source = 'Built SQL extracts and Excel models to identify repeat contacts and high-effort journeys, supporting practical process redesign recommendations.'
     const editable = createResumeBlocks([{ text: source, editable: true }])
     const expanded = validateTailoringResponse({
-      response: response([{ blockId: 'paragraph_0', text: 'Built SQL-based queries and Excel models to identify the business case for process redesigns by analyzing repeat contacts and high-effort journeys.' }]),
+      response: response([{ blockId: 'paragraph_0', text: 'Built SQL-based queries and Excel models to identify the business case for process redesigns by analyzing repeat contacts and high-effort journeys across multiple stakeholder groups and operational teams.' }]),
       editableSlots: editable,
     })
     const concise = validateTailoringResponse({

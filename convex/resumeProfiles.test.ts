@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isReusableProfile, normaliseResumeLines, parseResumeProfile, planProfileGeneration, PROFILE_SCHEMA_VERSION } from './resumeProfiles'
+import { isReusableProfile, normaliseResumeLines, parseResumeProfile, planProfileGeneration, PROFILE_SCHEMA_VERSION, resumeProfileResponseSchema } from './resumeProfiles'
 
 describe('resume profile helpers', () => {
   it('reuses only the same hash and schema version', () => {
@@ -20,5 +20,10 @@ describe('resume profile helpers', () => {
 
   it('normalises evidence line input', () => {
     expect(normaliseResumeLines(' First role \n\nSecond   role ')).toEqual(['First role', 'Second role'])
+  })
+
+  it('asks Gemini for the factual profile JSON shape rather than free-form text', () => {
+    expect(resumeProfileResponseSchema.required).toEqual(['skills', 'roles', 'achievements', 'education', 'totalYears'])
+    expect(resumeProfileResponseSchema.properties.skills).toBeDefined()
   })
 })

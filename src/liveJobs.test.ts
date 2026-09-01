@@ -21,6 +21,33 @@ describe('toLiveJobCard', () => {
       },
     })).toMatchObject({ freshnessLabel: 'Last updated 29 Aug', checkedLabel: 'Checked 30 Aug' })
   })
+
+  it('does not reuse old preference-based explanation copy as professional fit evidence', () => {
+    const card = toLiveJobCard({
+      rank: 1,
+      matchScore: 86,
+      matchExplanation: 'Based in Bengaluru · Remote role',
+      isRelatedMatch: false,
+      matchSource: 'preferences',
+      job: { _id: 'job-1', title: 'Backend Engineer', companyName: 'GitLab', locationLabel: 'Bengaluru, India', description: 'Build APIs', skills: ['TypeScript'], applyUrl: 'https://example.test/job', lastUpdatedAt: Date.now(), lastSeenAt: Date.now() },
+    })
+    expect(card?.fitSummary).toBe('Professional resume evidence is limited for this role, so its key requirements need closer review.')
+  })
+
+  it('puts a saved-city mismatch in cautions rather than Why it fits', () => {
+    const card = toLiveJobCard({
+      rank: 1,
+      matchScore: 86,
+      matchExplanation: 'Resume evidence: SQL',
+      fitSummary: 'Your resume shows direct experience with SQL, a core requirement for this role.',
+      matchSource: 'resume',
+      isRelatedMatch: false,
+      preferenceAlignment: { location: 'mismatch', workStyle: 'aligned', salary: 'unknown' },
+      job: { _id: 'job-1', title: 'Data Analyst', companyName: 'GitLab', locationLabel: 'Mumbai, India', description: 'Use SQL', skills: ['SQL'], applyUrl: 'https://example.test/job', lastUpdatedAt: Date.now(), lastSeenAt: Date.now() },
+    })
+    expect(card?.fitSummary).not.toContain('Mumbai')
+    expect(card?.cautions).toContain('This role is based in Mumbai, India, outside your saved city preferences.')
+  })
 })
 
 describe('summarizeRoleDescription', () => {

@@ -10,6 +10,10 @@ import { ConnectionsScreen } from './ConnectionsScreen'
 import { SourceHealthScreen } from './SourceHealthScreen'
 import { DashboardShell } from './DashboardShell'
 import { getDashboardStartScreen, type DashboardScreen } from './dashboardRouting'
+import { CareerPilotLanding } from './CareerPilotLanding'
+import { CareerPilotSignIn, type CareerPilotAuthMode } from './CareerPilotSignIn'
+import { CareerPilotSignUp } from './CareerPilotSignUp'
+import { OnboardingScreen } from './OnboardingScreen'
 
 const popularRoleOptions = ['Product Manager', 'Business Analyst', 'Data Analyst', 'Frontend Developer', 'Backend Developer', 'Full Stack Developer']
 const roleOptions = [
@@ -25,74 +29,72 @@ const metroCities = ['Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai',
 
 type PreferenceErrors = Partial<Record<'roles' | 'skills' | 'experience' | 'location' | 'workPreference' | 'salary' | 'jobType' | 'notice' | 'time' | 'form', string>>
 
-type AuthMode = 'signIn' | 'signUp'
+type AuthMode = CareerPilotAuthMode
 
-function AuthDialog({ initialMode, onClose }: { initialMode: AuthMode; onClose: () => void }) {
+function getAuthRoute(pathname = window.location.pathname): AuthMode | null {
+  if (pathname === '/sign-in') return 'signIn'
+  if (pathname === '/sign-up') return 'signUp'
+  return null
+}
+
+function getAuthPath(mode: AuthMode) {
+  return mode === 'signIn' ? '/sign-in' : '/sign-up'
+}
+
+function isOnboardingPath(pathname = window.location.pathname) {
+  return pathname === '/onboarding'
+}
+
+function isDashboardPath(pathname = window.location.pathname) {
+  return pathname === '/dashboard'
+}
+
+function AuthDialog({ mode, onClose, onNavigate }: { mode: AuthMode; onClose: () => void; onNavigate: (mode: AuthMode) => void }) {
   const { signIn } = useAuthActions()
-  const [mode, setMode] = useState<AuthMode>(initialMode)
-  const [isWorking, setIsWorking] = useState(false)
-  const [error, setError] = useState('')
 
-  const continueWithPassword = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const formData = new FormData(event.currentTarget)
-    const email = String(formData.get('email') ?? '').trim()
-    const password = String(formData.get('password') ?? '')
-
+  const continueWithPassword = async ({ email, password }: { email: string; password: string }) => {
     if (!/^\S+@\S+\.\S+$/.test(email)) {
-      setError('Enter a valid email address.')
-      return
+      return 'Enter a valid email address.'
     }
     if (password.length < 8) {
-      setError('Use a password with at least 8 characters.')
-      return
+      return 'Use a password with at least 8 characters.'
     }
 
-    setError('')
-    setIsWorking(true)
+    const formData = new FormData()
+    formData.set('email', email)
+    formData.set('password', password)
+    formData.set('flow', mode)
     try {
       await signIn('password', formData)
     } catch {
-      setError(mode === 'signIn' ? 'We could not sign you in with those details.' : 'We could not create that account. Try a different email address.')
-    } finally {
-      setIsWorking(false)
+      return mode === 'signIn' ? 'We could not sign you in with those details.' : 'We could not create that account. Try a different email address.'
     }
   }
 
   const continueWithGoogle = async () => {
-    setError('')
-    setIsWorking(true)
     try {
       await signIn('google')
     } catch {
-      setError('Google sign-in could not start. Please try again.')
-      setIsWorking(false)
+      return 'Google sign-in could not start. Please try again.'
     }
   }
 
-  return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
-      <section aria-labelledby="sign-in-title" className="sign-in-dialog real-auth-dialog" onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
-        <button aria-label="Close sign in" className="close-button" onClick={onClose} type="button">×</button>
-        <p className="eyebrow">{mode === 'signUp' ? 'PRIVATE FROM THE START' : 'WELCOME BACK'}</p>
-        <h2 id="sign-in-title">{mode === 'signUp' ? 'Your job search stays yours.' : 'Sign in to your job search.'}</h2>
-        <p className="auth-intro">Create an account before adding a resume. Each resume will belong only to its signed-in owner.</p>
+  if (mode === 'signUp') {
+    return <CareerPilotSignUp
+      onClose={onClose}
+      onGoogle={continueWithGoogle}
+      onPassword={continueWithPassword}
+      onSignIn={() => onNavigate('signIn')}
+    />
+  }
 
-        <button className="google-auth" disabled={isWorking} onClick={() => void continueWithGoogle()} type="button"><span aria-hidden="true">G</span> Continue with Google</button>
-        <div className="auth-divider"><span>or use email</span></div>
-
-        <form className="auth-form" noValidate onSubmit={(event) => void continueWithPassword(event)}>
-          <label>Email<input autoComplete="email" name="email" placeholder="you@example.com" type="email" /></label>
-          <label>Password<input autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'} name="password" placeholder="At least 8 characters" type="password" /></label>
-          {error && <p className="auth-error" role="alert">{error}</p>}
-          <input name="flow" type="hidden" value={mode} />
-          <button className="email-auth" disabled={isWorking} type="submit">{isWorking ? 'One moment…' : mode === 'signIn' ? 'Sign in with email' : 'Create my account'} <span aria-hidden="true">→</span></button>
-        </form>
-
-        <p className="auth-switch">{mode === 'signIn' ? 'New to CareerPilot?' : 'Already have an account?'} <button onClick={() => { setMode(mode === 'signIn' ? 'signUp' : 'signIn'); setError('') }} type="button">{mode === 'signIn' ? 'Create an account' : 'Sign in instead'}</button></p>
-      </section>
-    </div>
-  )
+  return <CareerPilotSignIn
+    mode={mode}
+    onClose={onClose}
+    onGoogle={continueWithGoogle}
+    onPassword={continueWithPassword}
+    onToggleMode={() => onNavigate('signUp')}
+  />
 }
 
 function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedded?: boolean; onBack: () => void; onViewResults: () => void }) {
@@ -103,6 +105,7 @@ function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedd
   const hasSuggestedSkills = useRef(false)
   const [roles, setRoles] = useState<string[]>([])
   const [roleSearch, setRoleSearch] = useState('')
+  const [skillInput, setSkillInput] = useState('')
   const [skills, setSkills] = useState('')
   const [experience, setExperience] = useState('')
   const [cities, setCities] = useState<string[]>([])
@@ -173,6 +176,28 @@ function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedd
 
   const matchingRoles = roleOptions.filter((role) => role.toLowerCase().includes(roleSearch.trim().toLowerCase()))
   const additionalSelectedRoles = roles.filter((role) => !popularRoleOptions.includes(role))
+  const selectedSkills = skills.split(',').map((skill) => skill.trim()).filter(Boolean)
+
+  const addRole = () => {
+    const role = roleSearch.trim()
+    if (!role || roles.includes(role)) return
+    setRoles((currentRoles) => [...currentRoles, role])
+    setRoleSearch('')
+    setIsReady(false)
+  }
+
+  const addSkill = () => {
+    const skill = skillInput.trim()
+    if (!skill || selectedSkills.some((currentSkill) => currentSkill.toLowerCase() === skill.toLowerCase())) return
+    setSkills([...selectedSkills, skill].join(', '))
+    setSkillInput('')
+    setIsReady(false)
+  }
+
+  const removeSkill = (skill: string) => {
+    setSkills(selectedSkills.filter((currentSkill) => currentSkill !== skill).join(', '))
+    setIsReady(false)
+  }
 
   const submitPreferences = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -220,6 +245,19 @@ function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedd
       setIsSaving(false)
     }
   }
+
+  if (embedded) return <main className="preferences-shell dashboard-preferences-shell">
+    <section aria-labelledby="preferences-heading" className="cpd-preferences-page">
+      <div className="cpd-page-head"><div><span className="cpd-eyebrow">SEARCH PREFERENCES</span><h1 id="preferences-heading">Keep your Daily Brief <span>focused.</span></h1><p>Update what matters to your next move. Changes will guide the next search without rewriting your current tracker.</p></div></div>
+      <form className="cpd-preferences-form" noValidate onSubmit={(event) => void submitPreferences(event)}>
+        <section className="cpd-preference-section"><div><h2>Roles and skills</h2><p>Sherpa uses these to distinguish strong-fit roles from generic matches.</p></div><div className="cpd-preference-fields"><div className="cpd-preference-field cpd-span-two"><label>Target roles</label><div className="cpd-selected-row">{roles.map((role) => <button aria-label={`Remove ${role}`} className="cpd-selected-chip" key={role} onClick={() => toggleRole(role)} type="button">{role} ×</button>)}</div><div className="cpd-inline-add"><input aria-label="Add target role" onChange={(event) => setRoleSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addRole() } }} placeholder="Search or add another role" type="text" value={roleSearch} /><button className="cpd-secondary-button" onClick={addRole} type="button">Add role</button></div>{errors.roles && <p className="cpd-field-error" role="alert">{errors.roles}</p>}</div><div className="cpd-preference-field cpd-span-two"><label>Priority skills</label><div className="cpd-selected-row">{selectedSkills.map((skill) => <button aria-label={`Remove ${skill}`} className="cpd-selected-chip" key={skill} onClick={() => removeSkill(skill)} type="button">{skill} ×</button>)}</div><div className="cpd-inline-add"><input aria-label="Add priority skill" onChange={(event) => setSkillInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addSkill() } }} placeholder="Add another priority skill" type="text" value={skillInput} /><button className="cpd-secondary-button" onClick={addSkill} type="button">Add skill</button></div><small className="cpd-field-hint">{skillsSuggested ? 'Suggested from your resume. Edit anything you want.' : 'Add the skills you want us to match.'}</small>{errors.skills && <p className="cpd-field-error" role="alert">{errors.skills}</p>}</div></div></section>
+        <section className="cpd-preference-section"><div><h2>Location and work</h2><p>Cities are needed only when Hybrid or On-site is selected.</p></div><div className="cpd-preference-fields"><div className="cpd-preference-field cpd-span-two"><label>Work preference</label><div className="cpd-choice-row">{workPreferenceOptions.map((preference) => <button aria-pressed={workPreferences.includes(preference)} className={workPreferences.includes(preference) ? 'cpd-choice selected' : 'cpd-choice'} key={preference} onClick={() => toggleWorkPreference(preference)} type="button">{preference}</button>)}</div>{errors.workPreference && <p className="cpd-field-error" role="alert">{errors.workPreference}</p>}</div><div className="cpd-preference-field cpd-span-two"><label>Preferred cities</label><div className="cpd-choice-row">{metroCities.map((city) => <button aria-pressed={cities.includes(city)} className={cities.includes(city) ? 'cpd-choice selected' : 'cpd-choice'} key={city} onClick={() => toggleCity(city)} type="button">{city}</button>)}<button aria-pressed={showOtherCity} className={showOtherCity ? 'cpd-choice selected' : 'cpd-choice'} onClick={() => setShowOtherCity((current) => !current)} type="button">Other city</button></div>{cities.some((city) => !metroCities.includes(city)) && <div className="cpd-selected-row">{cities.filter((city) => !metroCities.includes(city)).map((city) => <button aria-label={`Remove ${city}`} className="cpd-selected-chip" key={city} onClick={() => toggleCity(city)} type="button">{city} ×</button>)}</div>}{showOtherCity && <div className="cpd-inline-add"><input aria-label="Other city" onChange={(event) => setOtherCity(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addOtherCity() } }} placeholder="Search or add another city" type="text" value={otherCity} /><button className="cpd-secondary-button" onClick={addOtherCity} type="button">Add city</button></div>}{errors.location && <p className="cpd-field-error" role="alert">{errors.location}</p>}</div></div></section>
+        <details className="cpd-optional-preferences"><summary><span>Optional search preferences<small>Add these only if you want to narrow the Daily Brief further.</small></span></summary><div className="cpd-optional-body"><div className="cpd-preference-fields"><label className="cpd-preference-field"><span>Minimum expected salary · Optional</span><input min="0" onChange={(event) => setSalaryMin(event.target.value)} placeholder="e.g. 40" type="number" value={salaryMin} /></label><label className="cpd-preference-field"><span>Job type · Optional</span><select onChange={(event) => setJobType(event.target.value)} value={jobType}><option value="">Choose job type</option>{jobTypes.map((type) => <option key={type}>{type}</option>)}</select></label><label className="cpd-preference-field"><span>Notice period · Optional</span><select onChange={(event) => setNoticePeriod(event.target.value)} value={noticePeriod}><option value="">Choose notice period</option>{['Immediately', '15 days', '30 days', '60 days', '90 days'].map((period) => <option key={period}>{period}</option>)}</select></label><label className="cpd-preference-field"><span>Daily Brief time</span><input onChange={(event) => setDailyTime(event.target.value)} type="time" value={dailyTime} /></label><label className="cpd-preference-field cpd-span-two"><span>Companies to avoid · Optional</span><input onChange={(event) => setCompaniesToAvoid(event.target.value)} placeholder="Add company names separated by commas" type="text" value={companiesToAvoid} /></label></div></div></details>
+        <div className="cpd-form-actions"><button className="cpd-primary-button" disabled={isSaving} type="submit">{isSaving ? 'Saving changes…' : 'Save changes'}</button></div>
+        {errors.form && <p className="cpd-field-error" role="alert">{errors.form}</p>}{isReady && <p className="cpd-preferences-success" role="status">✓ Preferences saved. Your next brief will use these details.</p>}
+      </form>
+    </section>
+  </main>
 
   return (
     <main className={embedded ? 'preferences-shell dashboard-preferences-shell' : 'preferences-shell'}>
@@ -360,11 +398,8 @@ function PreferencesScreen({ embedded = false, onBack, onViewResults }: { embedd
 }
 
 function App() {
-  const [screen, setScreen] = useState<'landing' | DashboardScreen>('landing')
-  const [briefReady, setBriefReady] = useState(false)
-  const [signInOpen, setSignInOpen] = useState(false)
-  const [authIntent, setAuthIntent] = useState<AuthMode>('signIn')
-  const [jobAction, setJobAction] = useState('On Hold')
+  const [screen, setScreen] = useState<'landing' | DashboardScreen>(() => isOnboardingPath() ? 'onboarding' : 'landing')
+  const [authRoute, setAuthRoute] = useState<AuthMode | null>(() => getAuthRoute())
   const { isAuthenticated, isLoading } = useConvexAuth()
   const { signOut } = useAuthActions()
   const recoverOwnerData = useMutation(api.accountRecovery.recoverMine)
@@ -399,20 +434,58 @@ function App() {
 
     hasRoutedSignedInUser.current = true
     window.sessionStorage.removeItem('careerpilot:open-resume')
-    setBriefReady(false)
-    setSignInOpen(false)
+    const startScreen = getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences))
+    window.history.replaceState(null, '', startScreen === 'onboarding' ? '/onboarding' : isDashboardPath() ? '/dashboard' : '/')
+    setAuthRoute(null)
 
     setScreen(getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)))
   }, [isAuthenticated, ownerDataReady, savedPreferences, savedResume])
 
+  useEffect(() => {
+    const syncAuthRoute = () => setAuthRoute(getAuthRoute())
+    window.addEventListener('popstate', syncAuthRoute)
+    return () => window.removeEventListener('popstate', syncAuthRoute)
+  }, [])
+
+  const openAuth = (mode: AuthMode) => {
+    window.history.pushState(null, '', getAuthPath(mode))
+    setAuthRoute(mode)
+  }
+
+  const closeAuth = () => {
+    window.history.pushState(null, '', '/')
+    setAuthRoute(null)
+  }
+
   const openDashboard = () => {
     if (isAuthenticated) {
-      setScreen(getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)))
+      if (getDashboardStartScreen(Boolean(savedResume), Boolean(savedPreferences)) === 'onboarding') {
+        openOnboarding()
+      } else {
+        window.history.pushState(null, '', '/dashboard')
+        setScreen('apply')
+      }
       return
     }
-    setBriefReady(true)
-    setAuthIntent('signUp')
-    setSignInOpen(true)
+    openAuth('signUp')
+  }
+
+  const openOnboarding = () => {
+    window.history.pushState(null, '', '/onboarding')
+    setScreen('onboarding')
+  }
+
+  if (screen === 'onboarding' && isAuthenticated) {
+    return <OnboardingScreen
+      onExit={() => {
+        window.history.pushState(null, '', '/')
+        setScreen('landing')
+      }}
+      onComplete={() => {
+        window.history.replaceState(null, '', '/dashboard')
+        setScreen('apply')
+      }}
+    />
   }
 
   if (screen !== 'landing') {
@@ -421,7 +494,12 @@ function App() {
       setScreen('landing')
     }
 
-    return <DashboardShell active={screen} isAdmin={canViewSourceHealth === true} onHome={() => setScreen('landing')} onNavigate={setScreen} onSignOut={() => void signOutFromDashboard()}>
+    const navigateDashboard = (nextScreen: DashboardScreen) => {
+      window.history.pushState(null, '', '/dashboard')
+      setScreen(nextScreen)
+    }
+
+    return <DashboardShell active={screen} isAdmin={canViewSourceHealth === true} onHome={() => setScreen('landing')} onNavigate={navigateDashboard} onSignOut={() => void signOutFromDashboard()}>
       {screen === 'apply' && <ResultsScreen embedded onBack={() => setScreen('landing')} onEditPreferences={() => setScreen('preferences')} onOpenConnections={() => setScreen('connections')} onOpenTracker={() => setScreen('tracker')} />}
       {screen === 'resume' && <ResumeUpload embedded onBack={() => setScreen('landing')} onContinue={() => setScreen('preferences')} />}
       {screen === 'preferences' && <PreferencesScreen embedded onBack={() => setScreen('landing')} onViewResults={() => setScreen('apply')} />}
@@ -431,111 +509,19 @@ function App() {
     </DashboardShell>
   }
 
-  return (
-    <main className="app-shell" id="top">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="CareerPilot home">CareerPilot<span>.AI</span></a>
-        <nav aria-label="Landing page navigation" className="topbar-actions">
-          {isLoading ? <span className="auth-loading">Checking account…</span> : isAuthenticated ? <button className="sign-in" onClick={() => void signOutAndClear()} type="button">Sign out</button> : <button className="sign-in" onClick={() => { setAuthIntent('signIn'); setSignInOpen(true) }} type="button">Sign in</button>}
-          {isAuthenticated ? <button className="get-started" onClick={openDashboard} type="button">Open dashboard</button> : <button className="get-started" onClick={openDashboard} type="button">Get started</button>}
-        </nav>
-      </header>
-
-      <section className="workbench" aria-labelledby="hero-heading">
-        <div className="brief-builder">
-          <h1 id="hero-heading">The right tech roles,<span className="headline-tail"><em>without</em> the endless search.</span></h1>
-          <p className="intro">CareerPilot turns your resume and preferences into one daily brief of active roles worth opening.</p>
-
-          <div className="hero-actions">
-            <button className="build-brief" onClick={openDashboard} type="button">
-              {isAuthenticated ? 'Open dashboard' : briefReady ? 'Your brief is ready to start' : 'Build my daily brief'} <span aria-hidden="true">→</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="story" id="how-it-works" aria-labelledby="story-heading">
-        <div className="story-intro">
-          <p className="eyebrow">One daily search. A clear next step.</p>
-          <h2 id="story-heading">The work around job hunting is the work we remove.</h2>
-        </div>
-
-        <article className="story-chapter resume-chapter">
-          <div className="chapter-copy">
-            <p className="chapter-number">01 / YOUR EXPERIENCE</p>
-            <h3>Start from the work you have already done.</h3>
-            <p>Upload one readable PDF or DOCX resume. CareerPilot uses your roles, skills and experience with the preferences you set.</p>
-          </div>
-          <div className="resume-paper" aria-label="Resume upload example">
-            <div className="document-tab">RESUME</div>
-            <p className="resume-file">rakesh_resume.pdf</p>
-            <p className="resume-meta">Readable · 6 years experience</p>
-            <div className="resume-lines" aria-hidden="true"><i /><i /><i /><i /></div>
-            <div className="skill-signals"><span>React</span><span>TypeScript</span><span>APIs</span></div>
-            <p className="paper-note">The useful signals, without asking you to type your CV again.</p>
-          </div>
-        </article>
-
-        <article className="story-chapter freshness-chapter">
-          <div className="chapter-copy">
-            <p className="chapter-number">02 / FRESH ROLES ONLY</p>
-            <h3>Open roles get the front row.</h3>
-            <p>Each brief shows up to 10 India IT roles. Newer open listings come first; related roles appear only when stronger matches run short.</p>
-          </div>
-          <div className="freshness-board" aria-label="Freshness rules example">
-            <p className="board-label">WHAT MAKES THE LIST</p>
-            <div className="freshness-rule"><span className="rule-dot lime" /><div><strong>Still open</strong><small>The original application link must work.</small></div></div>
-            <div className="freshness-rule"><span className="rule-dot teal" /><div><strong>Posted within 60 days</strong><small>Older roles stay out of your brief.</small></div></div>
-            <div className="freshness-rule"><span className="rule-dot coral" /><div><strong>Checked again</strong><small>Every result shows when it was last checked.</small></div></div>
-          </div>
-        </article>
-
-        <article className="story-chapter actions-chapter">
-          <div className="chapter-copy">
-            <p className="chapter-number">03 / MAKE A MOVE</p>
-            <h3>Keep your decision visible, even when it is “not now.”</h3>
-            <p>Apply opens the company’s own application page. Reject and On Hold keep the decision with the job so you do not rediscover the same role later.</p>
-          </div>
-          <div className="action-playground" aria-live="polite">
-            <p className="playground-label">SAMPLE ROLE · FRONTEND ENGINEER</p>
-            <h4>What do you want to do with this one?</h4>
-            <div className="action-options">
-              {['Apply', 'On Hold', 'Reject'].map((action) => (
-                <button aria-pressed={jobAction === action} className={jobAction === action ? `job-action ${action.toLowerCase().replace(' ', '-') } chosen` : `job-action ${action.toLowerCase().replace(' ', '-') }`} key={action} onClick={() => setJobAction(action)} type="button">
-                  {action}
-                </button>
-              ))}
-            </div>
-            <p className="action-result"><span aria-hidden="true">●</span> {jobAction === 'Apply' ? 'Ready to open the company’s application page.' : jobAction === 'Reject' ? 'Marked as not for you. It will stay out of your active list.' : 'Saved for a better time. You can return to it in your tracker.'}</p>
-          </div>
-        </article>
-
-        <article className="story-chapter connections-chapter">
-          <div className="chapter-copy">
-            <p className="chapter-number">04 / FIND A FAMILIAR NAME</p>
-            <h3>See connections where the role is.</h3>
-            <p>Import your LinkedIn connections CSV. CareerPilot matches people only when their current company is the company hiring.</p>
-          </div>
-          <div className="connection-scene" aria-label="Company connection match example">
-            <div className="csv-slip"><span>CSV</span><p>My Connections</p><small>842 contacts imported</small></div>
-            <div className="company-orbit">
-              <p>NovaCart</p><span>Hiring company</span>
-              <i className="person person-one">A</i><i className="person person-two">K</i><i className="person person-three">M</i>
-            </div>
-            <p className="connection-result">3 people at NovaCart</p>
-          </div>
-        </article>
-      </section>
-
-      <section className="closing-call" aria-labelledby="closing-heading">
-        <p className="eyebrow">CareerPilot.AI</p>
-        <h2 id="closing-heading">Your next job search deserves a smaller to-do list.</h2>
-        <button className="closing-link" onClick={openDashboard} type="button">Build my job brief <span aria-hidden="true">↑</span></button>
-      </section>
-
-      {!isAuthenticated && signInOpen && <AuthDialog initialMode={authIntent} onClose={() => setSignInOpen(false)} />}
-    </main>
-  )
+  return <>
+    <CareerPilotLanding
+      onGetStarted={() => {
+        if (isAuthenticated) openOnboarding()
+        else openDashboard()
+      }}
+      onSignIn={() => {
+        if (isAuthenticated) openDashboard()
+        else openAuth('signIn')
+      }}
+    />
+    {!isLoading && !isAuthenticated && authRoute && <AuthDialog mode={authRoute} onClose={closeAuth} onNavigate={openAuth} />}
+  </>
 }
 
 export default App

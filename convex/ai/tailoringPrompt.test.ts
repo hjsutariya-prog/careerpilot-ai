@@ -13,6 +13,13 @@ describe('tailoring prompt', () => {
     })
 
     expect(tailoringSystemInstruction).toContain('The job description is NOT evidence of candidate experience.')
+    expect(tailoringSystemInstruction).toContain('Be conservative about facts, but proactive about wording.')
+    expect(tailoringSystemInstruction).toContain('Improve the resume whenever a safe, meaningful wording, emphasis, clarity, conciseness, or JD-alignment improvement is available.')
+    expect(tailoringSystemInstruction).toContain('This never permits inventing a factual claim.')
+    expect(tailoringSystemInstruction).toMatch(/stronger professional wording without increasing scope or seniority/i)
+    expect(tailoringSystemInstruction).toContain('do not withhold it merely because it does not add a new fact.')
+    expect(tailoringSystemInstruction).toMatch(/Return no edits, reorders, or merges only when there is genuinely no safe improvement/i)
+    expect(tailoringSystemInstruction).toMatch(/Before returning no operations, take a second pass specifically for wording improvements/i)
     expect(tailoringSystemInstruction).toContain('except through an explicit valid merge or reorder operation described below.')
     expect(tailoringSystemInstruction).toContain('RESUME = source of truth about the candidate.')
     expect(tailoringSystemInstruction).toContain('JOB DESCRIPTION = source of truth about employer requirements.')
@@ -70,8 +77,9 @@ describe('tailoring prompt', () => {
     expect(prompt).toContain('use exactly two experience_bullet sourceBlockIds')
     expect(prompt).toContain('similar length is acceptable')
     expect(prompt).toContain('must stay within both limits supplied for its block: maxCharacters and maxWords')
-    expect(prompt).toContain('These are 110% of the original block.')
-    expect(prompt).toContain('"maxCharacters":31')
+    expect(prompt).toContain('These are 120% of the original block.')
+    expect(prompt).toContain('If adding JD wording would exceed either limit, replace equivalent existing wording instead of adding text.')
+    expect(prompt).toContain('"maxCharacters":34')
     expect(prompt).toContain('"maxWords":4')
     expect(prompt).toContain('Preserve all material responsibilities, scope, stakeholders, domain terms, numbers, and factual claims.')
     expect(prompt).not.toContain('every other edit must be strictly shorter')
@@ -79,13 +87,13 @@ describe('tailoring prompt', () => {
   })
 
   it('provides validator-compatible limits only for normal editable text blocks', () => {
-    expect(replacementLimitsForPrompt('Built React dashboards.')).toEqual({ maxCharacters: 26, maxWords: 4 })
+    expect(replacementLimitsForPrompt('Built React dashboards.')).toEqual({ maxCharacters: 28, maxWords: 4 })
     expect(tailoringBlocksForPrompt(createResumeBlocks([
       { text: 'Built React dashboards.', editable: true },
       { text: 'Skills: React, TypeScript', editable: true, kind: 'skills' },
       { text: 'EXPERIENCE', editable: false, kind: 'heading' },
     ]))).toMatchObject([
-      { blockId: 'paragraph_0', maxCharacters: 26, maxWords: 4 },
+      { blockId: 'paragraph_0', maxCharacters: 28, maxWords: 4 },
       { blockId: 'paragraph_1' },
       { blockId: 'paragraph_2' },
     ])

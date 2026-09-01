@@ -1,0 +1,2027 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; style-src 'unsafe-inline' blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; img-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; font-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; media-src blob: data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://esm.sh https://fonts.bunny.net https://fonts.googleapis.com https://fonts.gstatic.com https://unpkg.com; worker-src blob:; connect-src blob: data:; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>CareerPilot — A Focused Daily Brief for Your Tech Job Search</title>
+<style>:root {
+  color-scheme: light dark;
+  background-color: var(
+    --background,
+    var(--color-background-primary, light-dark(rgb(255 255 255), rgb(24 24 24)))
+  ) !important;
+
+  /* Agent-facing contract; keep in sync with SKILL.md. */
+  --background: var(
+    --color-background-primary,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --card: color-mix(in oklab, var(--foreground) 5%, var(--background));
+  --card-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --popover: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255), rgb(45 45 45))
+  );
+  --popover-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --primary: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --primary-foreground: var(
+    --color-text-inverse,
+    light-dark(rgb(255 255 255), rgb(13 13 13))
+  );
+  --secondary: var(
+    --color-background-secondary,
+    light-dark(rgb(255 255 255 / 96%), rgb(54 54 54 / 96%))
+  );
+  --secondary-foreground: var(
+    --color-text-primary,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --muted: color-mix(in srgb, var(--foreground) 10%, transparent);
+  --muted-foreground: var(
+    --color-text-secondary,
+    light-dark(rgb(26 28 31 / 49.4%), rgb(255 255 255 / 49.8%))
+  );
+  --accent: var(
+    --color-background-info,
+    light-dark(rgb(229 242 255), rgb(13 39 63))
+  );
+  --accent-foreground: var(
+    --color-text-info,
+    light-dark(rgb(51 156 255), rgb(131 195 255))
+  );
+  --destructive: var(
+    --color-text-warning,
+    light-dark(rgb(226 85 7), rgb(255 133 73))
+  );
+  --border: var(
+    --color-border-secondary,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+  --input: var(
+    --color-border-primary,
+    light-dark(
+      rgb(26 28 31 / 11.8%),
+      color-mix(in oklab, rgb(0 0 0) 10%, transparent)
+    )
+  );
+  --ring: var(
+    --color-ring-primary,
+    light-dark(rgb(51 156 255), rgb(131 195 255 / 76%))
+  );
+  --font-size-base: var(--font-text-md-size, 14px);
+  --blue: light-dark(rgb(51 156 255), rgb(51 156 255));
+  --orange: light-dark(rgb(226 85 7), rgb(251 106 34));
+  --green: light-dark(rgb(0 162 64), rgb(64 201 119));
+  --red: light-dark(rgb(224 46 42), rgb(255 103 100));
+  --purple: light-dark(rgb(146 79 247), rgb(173 123 249));
+  --yellow: light-dark(rgb(255 195 0), rgb(255 210 64));
+  --viz-series-1: var(--primary);
+  --viz-series-2: light-dark(rgb(243 136 59), rgb(245 154 86));
+  --viz-series-3: light-dark(rgb(93 201 119), rgb(116 213 139));
+  --viz-series-4: light-dark(rgb(235 119 177), rgb(240 143 192));
+  --viz-series-5: light-dark(rgb(155 121 236), rgb(170 145 239));
+  --viz-series-6: light-dark(rgb(58 185 177), rgb(90 203 194));
+
+  /* Internal implementation variables; not part of the agent contract. */
+  --font-sans: -apple-system, system-ui, "Segoe UI", sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    monospace;
+  --font-size-normal: max(11px, var(--font-size-base));
+  --font-size-tooltip: calc(var(--font-size-base) - 1px);
+  --font-size-small: max(11px, calc(var(--font-size-base) - 2px));
+  --font-size-h1: calc(var(--font-size-normal) * 1.7142857143);
+  --font-size-h2: calc(var(--font-size-normal) * 1.4285714286);
+  --font-size-h3: calc(var(--font-size-normal) * 1.2857142857);
+  --font-weight-normal: 430;
+  --font-weight-medium: 500;
+  --line-height-normal: calc(var(--font-size-normal) * 1.5);
+  --line-height-tooltip: calc(var(--font-size-tooltip) * 1.4285714286);
+  --line-height-small: calc(var(--font-size-small) + 4px);
+  --radius: var(--border-radius-lg, 12.5px);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-2xl: calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
+  --shadow-sm: 0 1px 2px -1px rgb(0 0 0 / 8%);
+  --checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 17'%3E%3Cpath d='M12.8961 3.64101C13.1297 3.41418 13.4984 3.37523 13.7779 3.56581C14.0571 3.75635 14.1554 4.11331 14.0299 4.41347L13.9615 4.53847L7.71151 13.7045C7.59411 13.8767 7.4063 13.9877 7.19881 14.0072C6.99136 14.0267 6.78564 13.9533 6.63826 13.806L2.88826 10.056L2.79842 9.9457C2.6192 9.67407 2.64927 9.30496 2.88826 9.06581C3.12738 8.82669 3.49647 8.79676 3.76815 8.97597L3.8785 9.06581L7.03084 12.2182L12.8053 3.74941L12.8961 3.64101Z'/%3E%3C/svg%3E");
+
+  /* Legacy aliases; not part of the current agent contract. */
+  --viz-bg: transparent;
+  --viz-panel: var(--card);
+  --viz-border: var(--border);
+  --viz-text: var(--foreground);
+  --viz-muted: var(--muted-foreground);
+  --viz-accent: var(--primary);
+  --viz-accent-text: var(--primary-foreground);
+  --viz-accent-bg: var(--accent);
+  --viz-font-size: var(--font-size-base);
+  --viz-warning: var(--destructive);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html > body {
+  /* Preserve MCP aliases for older inline renderers without creating :root cycles. */
+  --color-background-primary: var(
+    --background,
+    light-dark(rgb(255 255 255), rgb(24 24 24))
+  );
+  --color-text-primary: var(
+    --foreground,
+    light-dark(rgb(26 28 31), rgb(255 255 255))
+  );
+  --color-border-secondary: var(
+    --border,
+    light-dark(rgb(26 28 31 / 8%), rgb(255 255 255 / 8.2%))
+  );
+
+  margin: 0;
+  padding: 5px;
+  color: var(--foreground);
+  background: transparent !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--font-size-normal);
+  font-weight: var(--font-weight-normal);
+  line-height: var(--line-height-normal);
+}
+
+a {
+  color: color-mix(in srgb, var(--viz-accent) 80%, var(--viz-text) 20%);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium, 500);
+  text-decoration: none;
+  text-underline-offset: 2px;
+}
+
+a:is(:hover, :focus-visible) {
+  text-decoration-line: underline;
+  text-decoration-style: dashed;
+  text-decoration-thickness: 0.5px;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-block: 0;
+}
+
+h1 {
+  font-size: var(--font-size-h1);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h2 {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+h3,
+h4,
+h5,
+h6 {
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3;
+}
+
+b,
+strong,
+th {
+  font-weight: var(--font-weight-medium);
+}
+
+code:not(pre code) {
+  display: inline;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  word-break: break-word;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--foreground);
+  font: inherit;
+  text-align: start;
+}
+
+.table :is(th, td) {
+  padding-block: 10px;
+  padding-inline: 0 24px;
+  overflow-wrap: anywhere;
+  border-bottom: 1px solid var(--border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.table-responsive > .table :is(th, td) {
+  overflow-wrap: break-word;
+}
+
+.table :is(th, td):last-child {
+  padding-inline-end: 0;
+}
+
+.table :is(caption, thead th) {
+  font-weight: 600;
+}
+
+.table thead th {
+  padding-block: 8px;
+  border-bottom-color: color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.table tbody tr:last-child :is(th, td) {
+  border-bottom: 0;
+}
+
+.table.table-sm :is(th, td) {
+  padding-block: 6px;
+}
+
+.table.table-sm :is(th, td):not(:last-child) {
+  padding-inline-end: 16px;
+}
+
+.table :is(.text-end, [align="right"]) {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.table :is(.text-center, [align="center"]) {
+  text-align: center;
+}
+
+.table .text-nowrap {
+  white-space: nowrap;
+}
+
+#widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent !important;
+}
+
+.card {
+  min-width: 0;
+  padding: 12px;
+  overflow: hidden;
+  overflow-wrap: break-word;
+  border-radius: var(--radius-2xl);
+  corner-shape: superellipse(1.5);
+  color: var(--card-foreground);
+  background: var(--card);
+}
+
+#widget > :not(.card, .progress) {
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.tooltip {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  left: 0;
+  width: max-content;
+  max-width: min(
+    20rem,
+    var(--tooltip-available-width, calc(100vw - 10px)),
+    calc(100vw - 10px)
+  );
+  max-height: min(
+    var(--tooltip-available-height, calc(100vh - 10px)),
+    calc(100vh - 10px)
+  );
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--popover-foreground);
+  background: var(--popover);
+  box-shadow: none;
+  font-size: var(--font-size-tooltip);
+  line-height: var(--line-height-tooltip);
+  overflow-wrap: break-word;
+  white-space: normal;
+  pointer-events: none;
+  user-select: none;
+}
+
+.viz-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(max(180px, 24%), 1fr));
+  gap: 10px;
+}
+
+.viz-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.viz-stat-value {
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.25;
+}
+
+.viz-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress {
+  display: flex;
+  height: 6px;
+  margin-block: calc((var(--line-height-normal, 1.5em) - 6px) / 2);
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+}
+
+.progress-bar {
+  height: 100%;
+  flex-shrink: 0;
+  border: 0;
+  background: var(--viz-series-1);
+}
+
+.viz-badge {
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  color: var(--accent-foreground);
+  background: var(--accent);
+  font-weight: var(--font-weight-medium);
+}
+
+small,
+.text-small,
+.viz-badge {
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+}
+
+.text-muted {
+  color: var(--muted-foreground);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.viz-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.viz-controls > .form-label {
+  display: grid;
+  min-width: min(100%, 260px);
+  flex: 1 1 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  margin-bottom: 0;
+}
+
+.viz-controls > .form-label > :is(.form-control, .form-range, .form-select) {
+  grid-column: 1 / -1;
+}
+
+.btn,
+.form-check-input,
+.form-control,
+.form-range,
+.form-select {
+  font: inherit;
+}
+
+.btn {
+  appearance: button;
+  display: inline-flex;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 8px;
+  -webkit-app-region: no-drag;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: var(--cursor-interaction, pointer);
+  text-align: center;
+  text-decoration: none;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn:is(.btn-block, .viz-tile) {
+  inline-size: 100%;
+}
+
+.btn.viz-tile {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+a.btn {
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn-primary {
+  border-color: transparent;
+  color: var(--primary-foreground);
+  background: var(--foreground);
+  background-clip: padding-box;
+}
+
+.btn-primary .text-muted {
+  color: color-mix(in srgb, var(--primary-foreground) 50%, transparent);
+}
+
+.btn-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--foreground) 80%, transparent);
+  background-clip: padding-box;
+}
+
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted-foreground);
+  background: transparent;
+}
+
+.btn-ghost:not(:disabled):hover {
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+[data-lucide] {
+  stroke-width: 1.6;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--foreground);
+}
+
+.form-control {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background: var(--secondary);
+}
+
+.form-control::placeholder {
+  color: var(--muted-foreground);
+}
+
+.form-control[type="file"] {
+  padding: 0;
+  overflow: hidden;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control[type="file"]::file-selector-button {
+  min-height: 26px;
+  margin-right: 8px;
+  padding: 0 8px;
+  border: 0;
+  border-right: 1px solid var(--input);
+  color: var(--secondary-foreground);
+  background: var(--secondary);
+  cursor: inherit;
+  font: inherit;
+}
+
+.form-control[type="file"]:not(:disabled):hover::file-selector-button {
+  background: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-control-color[type="color"] {
+  width: 40px;
+  height: 28px;
+  padding: 3px;
+  cursor: var(--cursor-interaction, pointer);
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.form-control-color[type="color"]::-webkit-color-swatch {
+  border: 0;
+  border-radius: calc(var(--radius-lg) - 4px);
+  corner-shape: superellipse(1.5);
+}
+
+textarea.form-control {
+  height: auto;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.form-control:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-control:disabled,
+.form-select:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.form-select {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  margin: 0;
+  padding: 0 32px 0 8px;
+  outline: none;
+  border: 1px solid var(--input);
+  border-radius: var(--radius-lg);
+  corner-shape: superellipse(1.5);
+  color: var(--foreground);
+  background-color: var(--secondary);
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+    linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px;
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-select:not(:disabled):hover {
+  background-color: color-mix(in srgb, var(--foreground) 6%, var(--secondary));
+}
+
+.form-select:focus-visible {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-check {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.form-check-input {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid var(--input);
+  color: var(--primary-foreground);
+  background-color: transparent;
+  cursor: var(--cursor-interaction, default);
+  transition:
+    background-color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"] {
+  border-color: var(--input);
+  border-radius: var(--radius-sm);
+  corner-shape: superellipse(1.5);
+  background-color: var(--secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input:not(:disabled):not(:checked):hover {
+  background-color: var(--card);
+}
+
+.form-check:not(.form-switch) .form-check-input[type="checkbox"]:checked {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.form-check:not(.form-switch)
+  .form-check-input[type="checkbox"]:checked::before {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: var(--primary-foreground);
+  content: "";
+  mask: var(--checkmark-image) center / 12px 12px no-repeat;
+}
+
+.form-check-input[type="radio"] {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+}
+
+.form-check-input[type="radio"]:checked {
+  border: 2px solid var(--primary);
+  background:
+    radial-gradient(circle, var(--primary-foreground) 0 2.5px, transparent 3px),
+    var(--primary);
+}
+
+.form-check:not(.form-switch) .form-check-input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.form-check:not(.form-switch) .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+}
+
+.form-switch .form-check-input:disabled,
+.form-switch .form-check-input:disabled + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.form-check-label {
+  color: var(--foreground);
+  cursor: var(--cursor-interaction, default);
+}
+
+.form-switch .form-check-input {
+  position: relative;
+  width: 32px;
+  height: 20px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--muted);
+  box-shadow: none;
+  transition: background-color 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input::before {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 1px solid light-dark(var(--primary-foreground), var(--foreground));
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+  box-shadow: var(--shadow-sm);
+  content: "";
+  transform: translate(2px, -50%);
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.form-switch .form-check-input:checked {
+  background: var(--primary);
+}
+
+.form-switch .form-check-input:checked::before {
+  transform: translate(14px, -50%);
+}
+
+.form-switch .form-check-input:focus-visible {
+  box-shadow: 0 0 0 2px var(--ring);
+}
+
+.form-range {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  flex: 1;
+  margin: 0;
+  padding: 0;
+  outline: none;
+  border: 0;
+  accent-color: var(--primary);
+  background: linear-gradient(
+      color-mix(in srgb, var(--foreground) 7%, transparent),
+      color-mix(in srgb, var(--foreground) 7%, transparent)
+    )
+    center / 100% 2px no-repeat;
+}
+
+.form-range::-webkit-slider-runnable-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-webkit-slider-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range::-moz-range-track {
+  height: 28px;
+  background: transparent;
+}
+
+.form-range::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: light-dark(var(--primary-foreground), var(--foreground));
+}
+
+.form-range:focus-visible::-moz-range-thumb {
+  border-color: var(--ring);
+  box-shadow: inset 0 0 0 1px var(--ring);
+}
+
+.form-range:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.btn:not(.btn-primary, .viz-tile):is(
+  [aria-pressed="true"],
+  [aria-selected="true"],
+  .is-selected
+) {
+  border-color: var(--primary);
+  color: var(--primary-foreground);
+  background: var(--primary);
+}
+
+.btn.viz-tile:is([aria-pressed="true"], [aria-selected="true"], .is-selected) {
+  border-color: var(--primary);
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .form-control,
+  .form-select {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control,
+  .form-select {
+    font-size: max(16px, var(--font-size-normal));
+  }
+
+  .form-control[type="file"]::file-selector-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .form-control-color[type="color"] {
+    width: 44px;
+    height: 44px;
+  }
+
+  .form-control:is(
+    [type="date"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="time"],
+    [type="week"]
+  ) {
+    min-width: 0;
+    max-width: 100%;
+    padding-block: 8px;
+  }
+
+  .form-check {
+    min-height: 44px;
+    padding-inline: 15px;
+  }
+
+  .form-check-input {
+    position: relative;
+  }
+
+  .form-check-input::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 44px;
+    height: 44px;
+    content: "";
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-label {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+  }
+
+  .form-range {
+    height: 44px;
+    touch-action: pan-y;
+  }
+
+  .form-range::-webkit-slider-runnable-track {
+    height: 44px;
+  }
+
+  .form-range::-moz-range-track {
+    height: 44px;
+  }
+
+  .form-range::-webkit-slider-thumb {
+    margin-top: 12px;
+  }
+}
+
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+#widget > svg {
+  width: 100%;
+}
+
+/* Model-authored chart rules can otherwise stretch icons after these styles load. */
+svg.lucide {
+  display: block;
+  width: 16px !important;
+  height: 16px !important;
+  flex: none;
+  margin: 0 !important;
+  stroke-width: 1.6;
+}
+
+.text-warning,
+.text-destructive {
+  color: var(--destructive);
+}
+
+html>body{padding:0}</style>
+</head>
+<body>
+<div id="careerpilot-landing-v3" data-product-theme="light">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500&family=Inter:wght@400;500&display=swap');
+
+    #careerpilot-landing-v3 {
+      --cp-page: #f6f7f2;
+      --cp-paper: #ffffff;
+      --cp-ink: #13213a;
+      --cp-muted: #627087;
+      --cp-faint: #8793a6;
+      --cp-line: #dfe4df;
+      --cp-navy: #13213a;
+      --cp-on-navy: #f8faf7;
+      --cp-blue: #396bdc;
+      --cp-blue-strong: #285ccf;
+      --cp-blue-soft: #e8edff;
+      --cp-sage: #dcecdf;
+      --cp-sage-ink: #28543e;
+      --cp-lilac: #ebe9fb;
+      --cp-warm: #f2efe5;
+      --cp-danger-soft: #f8e8e5;
+      --cp-danger: #9b443a;
+      --cp-hero: #eaf0f8;
+      --cp-cta-bg: #13213a;
+      --cp-cta-ink: #f8faf7;
+      --cp-cta-accent: #9ab7ff;
+      --cp-shadow: 0 24px 64px rgba(24, 40, 65, .12);
+      --cp-soft-shadow: 0 12px 34px rgba(24, 40, 65, .08);
+      --cp-gutter: clamp(18px, 3vw, 48px);
+      --cp-radius-sm: 10px;
+      --cp-radius-md: 16px;
+      --cp-radius-lg: 26px;
+      width: 100%;
+      overflow: clip;
+      color: var(--cp-ink);
+      background: var(--cp-page);
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    #careerpilot-landing-v3[data-product-theme="dark"] {
+      --cp-page: #0f1724;
+      --cp-paper: #182334;
+      --cp-ink: #f2f6fb;
+      --cp-muted: #b1bbcb;
+      --cp-faint: #8d9ab0;
+      --cp-line: #2d3a4c;
+      --cp-navy: #091426;
+      --cp-on-navy: #f4f7fb;
+      --cp-blue: #8badff;
+      --cp-blue-strong: #a8c0ff;
+      --cp-blue-soft: #213861;
+      --cp-sage: #203d34;
+      --cp-sage-ink: #b8dfc6;
+      --cp-lilac: #302e50;
+      --cp-warm: #332f25;
+      --cp-danger-soft: #422c2d;
+      --cp-danger: #ffb4a9;
+      --cp-hero: #17263a;
+      --cp-cta-bg: #152239;
+      --cp-cta-ink: #f4f7fb;
+      --cp-cta-accent: #a8c0ff;
+      --cp-shadow: 0 24px 64px rgba(0, 0, 0, .28);
+      --cp-soft-shadow: 0 12px 34px rgba(0, 0, 0, .2);
+    }
+
+    #careerpilot-landing-v3 * { box-sizing: border-box; }
+    #careerpilot-landing-v3 button,
+    #careerpilot-landing-v3 a { font: inherit; }
+    #careerpilot-landing-v3 button { cursor: pointer; }
+    #careerpilot-landing-v3 a { color: inherit; }
+    #careerpilot-landing-v3 h1,
+    #careerpilot-landing-v3 h2,
+    #careerpilot-landing-v3 h3,
+    #careerpilot-landing-v3 .cp-brand-word { font-family: "Instrument Sans", Inter, ui-sans-serif, system-ui, sans-serif; }
+    #careerpilot-landing-v3 h1,
+    #careerpilot-landing-v3 h2 { text-wrap: balance; }
+    #careerpilot-landing-v3 p { text-wrap: pretty; }
+    #careerpilot-landing-v3 :focus-visible { outline: 3px solid color-mix(in srgb, var(--cp-blue) 60%, var(--cp-paper)); outline-offset: 3px; }
+    #careerpilot-landing-v3 [hidden] { display: none !important; }
+    #careerpilot-landing-v3 .cp-wrap { width: 100%; padding: 0 var(--cp-gutter); }
+    #careerpilot-landing-v3 .cp-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    #careerpilot-landing-v3 .cp-nav { position: sticky; top: 0; z-index: 15; min-height: 88px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 24px; background: var(--cp-page); transition: background-color 180ms ease, box-shadow 180ms ease, color 180ms ease; }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled { margin-inline: calc(-1 * var(--cp-gutter)); padding-inline: var(--cp-gutter); background: color-mix(in srgb, var(--cp-navy) 96%, var(--cp-blue)); box-shadow: 0 10px 28px color-mix(in srgb, var(--cp-navy) 22%, transparent); }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-word-career,
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-word-pilot,
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-button-quiet { color: var(--cp-on-navy); }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-word-o { color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-button-primary { background: var(--cp-paper); color: var(--cp-ink); border-color: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled .cp-theme-toggle { color: var(--cp-on-navy); border-color: color-mix(in srgb, var(--cp-on-navy) 24%, transparent); }
+    #careerpilot-landing-v3 .cp-brand { width: max-content; display: inline-flex; align-items: center; text-decoration: none; }
+    #careerpilot-landing-v3 .cp-brand-word { display: inline-flex; align-items: baseline; font-size: 25px; font-weight: 500; letter-spacing: -.052em; }
+    #careerpilot-landing-v3 .cp-word-career { color: var(--cp-ink); }
+    #careerpilot-landing-v3 .cp-word-pilot { color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-word-o { position: relative; display: inline-block; width: .56em; height: .56em; margin: 0 .04em; border: .085em solid currentColor; border-radius: 50%; transform: translateY(.055em); }
+    #careerpilot-landing-v3 .cp-word-o::after { content: ""; position: absolute; left: 50%; top: 50%; width: .14em; height: .14em; border-radius: 50%; background: currentColor; transform: translate(-50%, -50%); }
+    #careerpilot-landing-v3 .cp-brand-compact .cp-brand-word { font-size: 16px; letter-spacing: -.03em; }
+    #careerpilot-landing-v3 .cp-nav-spacer { min-width: 0; }
+    #careerpilot-landing-v3 .cp-nav-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 0; }
+
+    #careerpilot-landing-v3 .cp-button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px; border: 1px solid var(--cp-line); border-radius: 999px; background: var(--cp-paper); color: var(--cp-ink); font-weight: 500; white-space: nowrap; transition: transform 140ms ease, background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
+    #careerpilot-landing-v3 .cp-button:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--cp-blue) 28%, var(--cp-line)); }
+    #careerpilot-landing-v3 .cp-button:active { transform: translateY(0) scale(.985); }
+    #careerpilot-landing-v3 .cp-button-primary { border-color: var(--cp-navy); background: var(--cp-navy); color: var(--cp-on-navy); }
+    #careerpilot-landing-v3 .cp-button-primary:hover { border-color: var(--cp-blue-strong); background: var(--cp-blue-strong); color: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-button-quiet { border-color: transparent; background: transparent; color: var(--cp-muted); }
+    #careerpilot-landing-v3 .cp-theme-toggle { width: 44px; min-height: 44px; display: grid; place-items: center; padding: 0; border: 1px solid var(--cp-line); border-radius: 50%; background: transparent; color: var(--cp-muted); transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease; }
+    #careerpilot-landing-v3 .cp-theme-toggle:hover { background: var(--cp-paper); color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-theme-symbol { position: relative; width: 15px; height: 15px; border: 2px solid currentColor; border-radius: 50%; }
+    #careerpilot-landing-v3 .cp-theme-symbol::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: currentColor; }
+    #careerpilot-landing-v3[data-product-theme="dark"] .cp-theme-symbol::after { inset: -3px -1px 3px 4px; background: var(--cp-paper); }
+
+    #careerpilot-landing-v3 .cp-hero { position: relative; min-height: 780px; padding: 78px clamp(20px, 3.4vw, 56px) 0; overflow: hidden; border-radius: 30px; background: linear-gradient(135deg, var(--cp-blue-soft), color-mix(in srgb, var(--cp-sage) 46%, var(--cp-hero))); }
+    #careerpilot-landing-v3 .cp-hero::before { content: ""; position: absolute; left: 0; top: 220px; width: 4px; height: 210px; border-radius: 0 999px 999px 0; background: var(--cp-blue); opacity: .72; }
+    #careerpilot-landing-v3 .cp-hero-copy { position: relative; z-index: 2; max-width: 820px; margin: 0 auto; text-align: center; }
+    #careerpilot-landing-v3 .cp-kicker { display: inline-flex; align-items: center; gap: 8px; color: var(--cp-blue); font-size: 12px; letter-spacing: .12em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-kicker-line { width: 28px; height: 1px; background: currentColor; }
+    #careerpilot-landing-v3 h1 { margin: 26px auto 20px; max-width: 850px; font-size: clamp(48px, 7vw, 80px); line-height: 1.01; letter-spacing: -.047em; font-weight: 500; }
+    #careerpilot-landing-v3 h1 em { color: var(--cp-blue); font-style: normal; }
+    #careerpilot-landing-v3 .cp-subhead { max-width: 670px; margin: 0 auto; color: var(--cp-muted); font-size: 17px; line-height: 1.7; }
+    #careerpilot-landing-v3 .cp-hero-actions { display: flex; justify-content: center; gap: 10px; margin-top: 28px; flex-wrap: wrap; }
+    #careerpilot-landing-v3 .cp-helper { margin: 12px 0 0; color: var(--cp-muted); font-size: 12px; }
+
+    #careerpilot-landing-v3 .cp-product-window { position: relative; z-index: 2; width: min(1120px, 94%); margin: 58px auto 0; padding: 12px; border-radius: 24px 24px 0 0; background: color-mix(in srgb, var(--cp-paper) 78%, transparent); box-shadow: var(--cp-shadow); }
+    #careerpilot-landing-v3 .cp-product-inner { min-height: 320px; display: grid; grid-template-columns: 184px minmax(0, 1fr); overflow: hidden; border-radius: 15px 15px 0 0; background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-product-nav { padding: 20px 14px; background: color-mix(in srgb, var(--cp-sage) 42%, var(--cp-paper)); }
+    #careerpilot-landing-v3 .cp-product-nav .cp-brand-compact { margin-bottom: 24px; }
+    #careerpilot-landing-v3 .cp-product-link { margin: 4px 0; padding: 9px 10px; border-radius: 8px; color: var(--cp-muted); font-size: 12px; }
+    #careerpilot-landing-v3 .cp-product-nav .is-active { background: var(--cp-paper); color: var(--cp-blue); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-brief-preview { min-width: 0; padding: 22px 24px; }
+    #careerpilot-landing-v3 .cp-brief-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; }
+    #careerpilot-landing-v3 .cp-brief-date { display: block; margin-bottom: 5px; color: var(--cp-blue); font-size: 11px; letter-spacing: .1em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-brief-head h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-brief-summary { display: flex; align-items: center; gap: 8px; color: var(--cp-muted); font-size: 12px; }
+    #careerpilot-landing-v3 .cp-brief-count { min-width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--cp-blue); color: var(--cp-paper); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 9px; border-radius: 999px; background: var(--cp-blue-soft); color: var(--cp-blue); font-size: 11px; font-weight: 500; white-space: nowrap; }
+
+    #careerpilot-landing-v3 .cp-agent-job { padding: 18px; border: 1px solid var(--cp-line); border-radius: var(--cp-radius-md); background: color-mix(in srgb, var(--cp-paper) 90%, var(--cp-page)); }
+    #careerpilot-landing-v3 .cp-agent-job-top { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 13px; align-items: center; }
+    #careerpilot-landing-v3 .cp-agent-company { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; background: var(--cp-sage); color: var(--cp-sage-ink); font-size: 12px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-job h3 { margin: 0 0 4px; font-size: 16px; letter-spacing: -.012em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-job p { margin: 0; color: var(--cp-muted); font-size: 12px; }
+    #careerpilot-landing-v3 .cp-agent-match { min-width: 92px; padding: 9px 11px; border-radius: 12px; background: var(--cp-blue-soft); color: var(--cp-blue); text-align: left; }
+    #careerpilot-landing-v3 .cp-agent-match strong { display: block; font-size: 13px; line-height: 1.2; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-match small { display: block; margin-top: 3px; color: var(--cp-muted); font-size: 11px; }
+    #careerpilot-landing-v3 .cp-fit-reasons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 16px; }
+    #careerpilot-landing-v3 .cp-fit-reasons span { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 5px 9px; border-radius: 8px; background: var(--cp-paper); color: var(--cp-muted); font-size: 11px; }
+    #careerpilot-landing-v3 .cp-fit-reasons span::before { content: "✓"; color: var(--cp-blue); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-job-meta { display: flex; gap: 8px 17px; flex-wrap: wrap; margin-top: 14px; color: var(--cp-muted); font-size: 11px; }
+    #careerpilot-landing-v3 .cp-agent-job-meta span { position: relative; }
+    #careerpilot-landing-v3 .cp-agent-job-meta span + span::before { content: ""; position: absolute; left: -10px; top: 50%; width: 3px; height: 3px; border-radius: 50%; background: var(--cp-faint); transform: translateY(-50%); }
+    #careerpilot-landing-v3 .cp-agent-job-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--cp-line); }
+    #careerpilot-landing-v3 .cp-product-action { display: inline-flex; align-items: center; justify-content: center; cursor: default; user-select: none; }
+    #careerpilot-landing-v3 .cp-agent-job-actions .cp-product-action { min-height: 44px; border-radius: 10px; border: 1px solid var(--cp-line); background: var(--cp-paper); color: var(--cp-ink); font-size: 12px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-job-actions .is-primary { border-color: var(--cp-navy); background: var(--cp-navy); color: var(--cp-on-navy); }
+    #careerpilot-landing-v3 .cp-brief-reason { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: start; margin-top: 10px; padding: 12px 14px; border-left: 3px solid var(--cp-blue); background: var(--cp-blue-soft); }
+    #careerpilot-landing-v3 .cp-brief-reason strong { color: var(--cp-blue); font-size: 11px; letter-spacing: .08em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-brief-reason span { color: var(--cp-muted); font-size: 12px; line-height: 1.5; }
+
+    #careerpilot-landing-v3 .cp-proof { width: min(1440px, 100%); display: grid; grid-template-columns: repeat(3, 1fr); margin: 24px auto 0; overflow: hidden; border: 1px solid var(--cp-line); border-radius: 18px; background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-proof-item { min-width: 0; padding: 24px 26px; }
+    #careerpilot-landing-v3 .cp-proof-item + .cp-proof-item { border-left: 1px solid var(--cp-line); }
+    #careerpilot-landing-v3 .cp-proof-kicker { display: block; margin-bottom: 8px; color: var(--cp-blue); font-size: 11px; line-height: 1.2; letter-spacing: .12em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-proof strong { display: block; margin-bottom: 8px; font-family: "Instrument Sans", Inter, ui-sans-serif, system-ui, sans-serif; font-size: 18px; letter-spacing: -.018em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-proof p { margin: 0; color: var(--cp-muted); font-size: 13px; line-height: 1.6; }
+
+    #careerpilot-landing-v3 .cp-label { color: var(--cp-blue); font-size: 11px; letter-spacing: .13em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-heading-accent { color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-agent-section { margin-top: 96px; padding: 92px clamp(24px, 4.5vw, 76px) 84px; border-radius: 32px; background: color-mix(in srgb, var(--cp-blue-soft) 56%, var(--cp-page)); }
+    #careerpilot-landing-v3 .cp-agent-head { width: min(1440px, 100%); display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr); gap: 56px; align-items: end; margin: 0 auto 58px; }
+    #careerpilot-landing-v3 .cp-agent-head h2 { margin: 12px 0 0; max-width: 760px; font-size: clamp(40px, 5vw, 60px); line-height: 1.04; letter-spacing: -.043em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-head p { margin: 0; color: var(--cp-muted); font-size: 16px; line-height: 1.72; }
+    #careerpilot-landing-v3 .cp-agent-head p strong { color: var(--cp-blue); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-grid { width: min(1440px, 100%); display: grid; grid-template-columns: .88fr 1.12fr; gap: 56px; align-items: center; margin: 0 auto; }
+    #careerpilot-landing-v3 .cp-agent-steps { position: relative; display: grid; gap: 8px; }
+    #careerpilot-landing-v3 .cp-agent-steps::before { content: ""; position: absolute; left: 18px; top: 32px; bottom: 32px; width: 1px; background: color-mix(in srgb, var(--cp-blue) 38%, var(--cp-line)); }
+    #careerpilot-landing-v3 .cp-agent-step { position: relative; width: 100%; display: grid; grid-template-columns: 38px minmax(0, 1fr) 28px; gap: 14px; align-items: center; padding: 18px 16px 18px 0; text-align: left; border: 0; border-radius: 16px; background: transparent; color: var(--cp-ink); transition: background-color 160ms ease, transform 160ms ease; }
+    #careerpilot-landing-v3 .cp-agent-step:hover { background: color-mix(in srgb, var(--cp-paper) 62%, transparent); }
+    #careerpilot-landing-v3 .cp-agent-step.is-active { background: var(--cp-paper); box-shadow: var(--cp-soft-shadow); }
+    #careerpilot-landing-v3 .cp-agent-step-number { position: relative; z-index: 1; width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid var(--cp-line); border-radius: 50%; background: var(--cp-page); color: var(--cp-faint); font-size: 11px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-step.is-active .cp-agent-step-number { border-color: var(--cp-blue); background: var(--cp-blue); color: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-agent-step strong { font-family: "Instrument Sans", Inter, ui-sans-serif, system-ui, sans-serif; font-size: 21px; letter-spacing: -.022em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-step.is-active strong { color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-agent-step-copy { display: none; grid-column: 2 / -1; max-width: 470px; color: var(--cp-muted); font-size: 13px; line-height: 1.65; }
+    #careerpilot-landing-v3 .cp-agent-step.is-active .cp-agent-step-copy { display: block; }
+    #careerpilot-landing-v3 .cp-agent-chevron { position: relative; width: 28px; height: 28px; }
+    #careerpilot-landing-v3 .cp-agent-chevron::before,
+    #careerpilot-landing-v3 .cp-agent-chevron::after { content: ""; position: absolute; left: 8px; top: 13px; width: 12px; height: 1.5px; background: var(--cp-ink); transition: transform 160ms ease; }
+    #careerpilot-landing-v3 .cp-agent-chevron::after { transform: rotate(90deg); }
+    #careerpilot-landing-v3 .cp-agent-step.is-active .cp-agent-chevron::after { transform: rotate(0deg); }
+    #careerpilot-landing-v3 .cp-agent-stage { position: relative; padding: 12px; border-radius: 26px; background: var(--cp-paper); box-shadow: var(--cp-shadow); }
+    #careerpilot-landing-v3 .cp-agent-stage::before { content: ""; position: absolute; left: 28px; right: 28px; top: 0; height: 3px; border-radius: 0 0 999px 999px; background: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-agent-screen { padding: 22px; border-radius: 18px; background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-agent-screen-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
+    #careerpilot-landing-v3 .cp-agent-screen-heading { min-width: 0; }
+    #careerpilot-landing-v3 .cp-agent-screen-kicker { display: block; margin-bottom: 5px; color: var(--cp-blue); font-size: 11px; letter-spacing: .12em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-screen-head strong { display: block; font-family: "Instrument Sans", Inter, ui-sans-serif, system-ui, sans-serif; font-size: 19px; letter-spacing: -.018em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-note { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 12px; margin-top: 12px; padding: 17px; border-left: 3px solid var(--cp-blue); background: var(--cp-blue-soft); color: var(--cp-ink); }
+    #careerpilot-landing-v3 .cp-agent-avatar { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; background: var(--cp-blue); color: var(--cp-paper); font-size: 12px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-note-kicker { display: block; margin-bottom: 5px; color: var(--cp-blue); font-size: 11px; letter-spacing: .1em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-note strong { display: block; margin-bottom: 5px; font-size: 14px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-agent-note p { margin: 0; color: var(--cp-muted); font-size: 12px; line-height: 1.6; }
+
+    #careerpilot-landing-v3 .cp-transition { width: min(1400px, calc(100% - 40px)); display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .75fr); gap: 48px; align-items: center; margin: 74px auto 64px; padding-left: 24px; border-left: 3px solid var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-transition h2 { margin: 0; font-size: clamp(32px, 4vw, 48px); line-height: 1.08; letter-spacing: -.038em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-transition p { margin: 0; color: var(--cp-muted); font-size: 16px; line-height: 1.65; }
+
+    #careerpilot-landing-v3 .cp-prepare { padding: 88px clamp(24px, 4.5vw, 76px) 92px; border-block: 1px solid var(--cp-line); background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-prepare-head { width: min(1440px, 100%); display: grid; grid-template-columns: minmax(0, 1.16fr) minmax(280px, .84fr); gap: 56px; align-items: end; margin: 0 auto 48px; }
+    #careerpilot-landing-v3 .cp-prepare-head h2 { margin: 12px 0 0; max-width: 780px; font-size: clamp(40px, 5vw, 58px); line-height: 1.05; letter-spacing: -.042em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-prepare-head p { margin: 0; color: var(--cp-muted); font-size: 16px; line-height: 1.7; }
+    #careerpilot-landing-v3 .cp-prepare-head p strong { color: var(--cp-blue); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-feature-switch { width: min(760px, 100%); display: flex; gap: 6px; margin: 0 auto 16px; padding: 5px; border-radius: 14px; background: var(--cp-page); }
+    #careerpilot-landing-v3 .cp-feature-option { flex: 1; min-height: 54px; padding: 10px 14px; text-align: left; border: 0; border-radius: 10px; background: transparent; color: var(--cp-muted); font-weight: 500; transition: background-color 140ms ease, color 140ms ease; }
+    #careerpilot-landing-v3 .cp-feature-option:hover { color: var(--cp-ink); }
+    #careerpilot-landing-v3 .cp-feature-option[aria-selected="true"] { background: var(--cp-paper); color: var(--cp-blue); box-shadow: 0 4px 14px rgba(24, 40, 65, .08); }
+    #careerpilot-landing-v3 .cp-feature-option small { display: block; margin-top: 3px; color: var(--cp-muted); font-size: 12px; line-height: 1.4; font-weight: 400; }
+    #careerpilot-landing-v3 .cp-feature-stage { width: min(1440px, 100%); margin: 0 auto; padding: 14px; border-radius: 24px; background: color-mix(in srgb, var(--cp-sage) 54%, var(--cp-page)); }
+    #careerpilot-landing-v3 .cp-feature-panel { min-height: 420px; padding: 24px; border-radius: 16px; background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-feature-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 24px; }
+    #careerpilot-landing-v3 .cp-feature-panel-head strong { font-size: 16px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-resume-flow { display: grid; grid-template-columns: minmax(0, 1fr) 140px minmax(0, 1fr); gap: 18px; align-items: stretch; }
+    #careerpilot-landing-v3 .cp-resume-sources { display: grid; gap: 10px; align-content: center; }
+    #careerpilot-landing-v3 .cp-resume-source { display: grid; grid-template-columns: 42px minmax(0, 1fr); gap: 12px; align-items: center; padding: 16px; border-radius: 14px; background: var(--cp-page); }
+    #careerpilot-landing-v3 .cp-resume-source-mark { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: var(--cp-sage); color: var(--cp-sage-ink); font-size: 11px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-resume-source:nth-child(2) .cp-resume-source-mark { background: var(--cp-lilac); color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-resume-source strong { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-resume-source p { margin: 0; color: var(--cp-muted); font-size: 12px; line-height: 1.5; }
+    #careerpilot-landing-v3 .cp-resume-source .cp-pill { grid-column: 2; justify-self: start; }
+    #careerpilot-landing-v3 .cp-tailor-bridge { display: grid; place-items: center; align-content: center; gap: 12px; color: var(--cp-muted); text-align: center; font-size: 12px; line-height: 1.45; }
+    #careerpilot-landing-v3 .cp-ai-node { width: 86px; height: 86px; display: grid; place-items: center; align-content: center; gap: 3px; border-radius: 50%; background: var(--cp-navy); color: var(--cp-on-navy); }
+    #careerpilot-landing-v3 .cp-ai-node strong { font-size: 13px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-ai-node small { font-size: 11px; opacity: .72; }
+    #careerpilot-landing-v3 .cp-tailor-arrow { position: relative; width: 70px; height: 2px; background: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-tailor-arrow::after { content: ""; position: absolute; right: 0; top: -4px; width: 9px; height: 9px; border-top: 2px solid var(--cp-blue); border-right: 2px solid var(--cp-blue); transform: rotate(45deg); }
+    #careerpilot-landing-v3 .cp-tailored-resume { display: flex; flex-direction: column; justify-content: space-between; gap: 18px; padding: 20px; border-radius: 16px; background: var(--cp-blue-soft); }
+    #careerpilot-landing-v3 .cp-tailored-resume-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+    #careerpilot-landing-v3 .cp-tailored-resume h3 { margin: 16px 0 14px; font-size: 20px; line-height: 1.25; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-tailored-list { display: grid; gap: 9px; }
+    #careerpilot-landing-v3 .cp-tailored-list span { position: relative; padding-left: 20px; color: var(--cp-muted); font-size: 12px; line-height: 1.5; }
+    #careerpilot-landing-v3 .cp-tailored-list span::before { content: "✓"; position: absolute; left: 0; color: var(--cp-blue); font-weight: 500; }
+    #careerpilot-landing-v3 .cp-grounded { padding: 14px; border-left: 3px solid var(--cp-blue); background: var(--cp-paper); }
+    #careerpilot-landing-v3 .cp-grounded strong { display: block; margin-bottom: 4px; color: var(--cp-blue); font-size: 13px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-grounded span { display: block; color: var(--cp-muted); font-size: 12px; line-height: 1.5; }
+    #careerpilot-landing-v3 .cp-tailored-actions { display: flex; justify-content: flex-end; }
+    #careerpilot-landing-v3 .cp-tailored-actions .cp-product-action { min-height: 44px; padding: 0 18px; border: 1px solid var(--cp-line); border-radius: 999px; background: var(--cp-paper); color: var(--cp-ink); font-size: 12px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connections-layout { display: grid; grid-template-columns: .72fr 1.28fr; gap: 18px; }
+    #careerpilot-landing-v3 .cp-connection-role { display: flex; flex-direction: column; justify-content: space-between; gap: 28px; padding: 22px; border-radius: 16px; background: var(--cp-navy); color: var(--cp-on-navy); }
+    #careerpilot-landing-v3 .cp-connection-role-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; background: var(--cp-blue); color: var(--cp-paper); font-size: 12px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connection-role h3 { margin: 18px 0 5px; font-size: 21px; line-height: 1.25; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connection-role p { margin: 0; color: var(--cp-on-navy); opacity: .72; font-size: 12px; line-height: 1.55; }
+    #careerpilot-landing-v3 .cp-linkedin-label { display: inline-flex; align-items: flex-start; gap: 9px; font-size: 12px; }
+    #careerpilot-landing-v3 .cp-linkedin-mark { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 7px; background: var(--cp-blue); color: var(--cp-paper); font-size: 11px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-linkedin-label small { display: block; margin-bottom: 4px; color: var(--cp-cta-accent); font-size: 10px; line-height: 1.25; letter-spacing: .1em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-linkedin-label strong { display: block; color: var(--cp-on-navy); font-size: 12px; line-height: 1.4; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connection-list { display: grid; gap: 9px; align-content: start; }
+    #careerpilot-landing-v3 .cp-connection-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border-radius: 14px; background: var(--cp-page); }
+    #careerpilot-landing-v3 .cp-connection-avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--cp-lilac); color: var(--cp-blue); font-size: 11px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connection-row strong { display: block; margin-bottom: 3px; font-size: 13px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-connection-row p { margin: 0; color: var(--cp-muted); font-size: 12px; line-height: 1.45; }
+    #careerpilot-landing-v3 .cp-connection-action { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; width: max-content; padding: 0 12px; cursor: default; user-select: none; border: 1px solid var(--cp-line); border-radius: 9px; background: var(--cp-paper); color: var(--cp-ink); font-size: 12px; font-weight: 500; white-space: nowrap; }
+    #careerpilot-landing-v3 .cp-connections-note { margin: 5px 0 0; color: var(--cp-muted); font-size: 12px; line-height: 1.55; }
+    #careerpilot-landing-v3 .cp-import-note { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--cp-line); }
+    #careerpilot-landing-v3 .cp-import-note strong { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-import-note p { margin: 0; max-width: 760px; color: var(--cp-muted); font-size: 12px; line-height: 1.55; }
+    #careerpilot-landing-v3 .cp-connection-match-short { display: none; }
+
+    #careerpilot-landing-v3 .cp-organise { margin-top: 104px; padding: 0 clamp(18px, 4vw, 68px) 48px; }
+    #careerpilot-landing-v3 .cp-organise-copy { width: min(1240px, 100%); display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: 72px; align-items: end; margin: 0 auto 34px; }
+    #careerpilot-landing-v3 .cp-organise-copy h2 { margin: 12px 0 0; max-width: 690px; font-size: clamp(38px, 5vw, 56px); line-height: 1.06; letter-spacing: -.04em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-organise-copy p { margin: 0; color: var(--cp-muted); font-size: 16px; line-height: 1.7; }
+    #careerpilot-landing-v3 .cp-tracker { width: min(1240px, 100%); margin: 0 auto; padding: 24px; border: 1px solid var(--cp-line); border-radius: 22px; background: var(--cp-paper); box-shadow: var(--cp-soft-shadow); }
+    #careerpilot-landing-v3 .cp-tracker-top { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
+    #careerpilot-landing-v3 .cp-tracker-top strong { font-size: 16px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-track-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--cp-line); }
+    #careerpilot-landing-v3 .cp-track-filter { min-height: 32px; display: inline-flex; align-items: center; padding: 6px 10px; cursor: default; user-select: none; border: 1px solid transparent; border-radius: 999px; background: var(--cp-page); color: var(--cp-muted); font-size: 11px; }
+    #careerpilot-landing-v3 .cp-track-filter.is-active { background: var(--cp-blue-soft); color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-track-columns { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(220px, .65fr) 150px; gap: 20px; padding: 0 14px 9px; color: var(--cp-faint); font-size: 11px; letter-spacing: .08em; }
+    #careerpilot-landing-v3 .cp-track-columns span:last-child { text-align: center; }
+    #careerpilot-landing-v3 .cp-track-list { display: grid; gap: 7px; }
+    #careerpilot-landing-v3 .cp-track-item { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(220px, .65fr) 150px; gap: 20px; align-items: center; min-height: 68px; padding: 13px 14px; border-radius: 12px; background: var(--cp-page); }
+    #careerpilot-landing-v3 .cp-track-item strong { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-track-item span { color: var(--cp-muted); font-size: 11px; }
+    #careerpilot-landing-v3 .cp-next-action { min-width: 0; }
+    #careerpilot-landing-v3 .cp-next-action small { display: none; margin-bottom: 4px; color: var(--cp-faint); font-size: 11px; letter-spacing: .08em; }
+    #careerpilot-landing-v3 .cp-next-action strong { color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-status { justify-self: end; min-width: 132px; justify-content: center; text-align: center; }
+    #careerpilot-landing-v3 .cp-status.is-rejected { background: var(--cp-danger-soft); color: var(--cp-danger); }
+
+    #careerpilot-landing-v3 .cp-cta { position: relative; isolation: isolate; width: min(1600px, 100%); display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 54px; align-items: center; margin: 74px auto 26px; padding: 72px clamp(30px, 5vw, 84px); overflow: hidden; border-radius: 32px; background: var(--cp-cta-bg); color: var(--cp-cta-ink); }
+    #careerpilot-landing-v3 .cp-cta::after { content: ""; position: absolute; z-index: -1; right: -220px; top: -260px; width: 500px; height: 500px; border-radius: 50%; background: color-mix(in srgb, var(--cp-blue) 18%, transparent); }
+    #careerpilot-landing-v3 .cp-cta-copy { max-width: 800px; }
+    #careerpilot-landing-v3 .cp-cta-label { display: inline-flex; margin-bottom: 14px; color: var(--cp-cta-accent); font-size: 11px; letter-spacing: .14em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-cta h2 { margin: 0 0 18px; font-size: clamp(40px, 5vw, 60px); line-height: 1.05; letter-spacing: -.043em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-cta h2 em { display: block; color: var(--cp-cta-accent); font-style: normal; }
+    #careerpilot-landing-v3 .cp-cta p { max-width: 640px; margin: 0; color: var(--cp-cta-ink); opacity: .76; font-size: 15px; line-height: 1.7; }
+    #careerpilot-landing-v3 .cp-cta-action { justify-self: end; width: min(350px, 100%); }
+    #careerpilot-landing-v3 .cp-cta .cp-button-primary { width: 100%; min-height: 52px; background: var(--cp-cta-ink); color: var(--cp-cta-bg); border-color: var(--cp-cta-ink); }
+    #careerpilot-landing-v3 .cp-cta .cp-button-primary:hover { background: var(--cp-blue); color: var(--cp-paper); border-color: var(--cp-blue); }
+    #careerpilot-landing-v3 .cp-cta-arrow { font-size: 18px; line-height: 1; transition: transform 140ms ease; }
+    #careerpilot-landing-v3 .cp-cta .cp-button-primary:hover .cp-cta-arrow { transform: translateX(3px); }
+    #careerpilot-landing-v3 .cp-cta-note { display: block; margin-top: 12px; color: var(--cp-cta-ink); opacity: .68; text-align: center; font-size: 12px; }
+    #careerpilot-landing-v3 .cp-footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 30px 0 44px; color: var(--cp-muted); font-size: 12px; }
+    #careerpilot-landing-v3 .cp-footer-links { display: flex; gap: 18px; flex-wrap: wrap; }
+    #careerpilot-landing-v3 .cp-footer-links a { text-underline-offset: 4px; text-decoration-color: transparent; }
+    #careerpilot-landing-v3 .cp-footer-links a:hover { color: var(--cp-blue); text-decoration-color: currentColor; }
+    #careerpilot-landing-v3 .cp-nav.is-scrolled :focus-visible,
+    #careerpilot-landing-v3 .cp-cta :focus-visible { outline-color: var(--cp-cta-accent); }
+
+    #careerpilot-landing-v3 .cp-dialog { width: min(470px, calc(100% - 32px)); padding: 0; border: 0; border-radius: 22px; background: transparent; color: var(--cp-ink); }
+    #careerpilot-landing-v3 .cp-dialog::backdrop { background: rgba(15, 24, 38, .58); }
+    #careerpilot-landing-v3 .cp-dialog-card { padding: 28px; border-radius: 22px; background: var(--cp-paper); box-shadow: var(--cp-shadow); }
+    #careerpilot-landing-v3 .cp-dialog h2 { margin: 0 0 10px; font-size: 26px; letter-spacing: -.028em; font-weight: 500; }
+    #careerpilot-landing-v3 .cp-dialog p { margin: 0 0 22px; color: var(--cp-muted); font-size: 14px; line-height: 1.65; }
+    #careerpilot-landing-v3 .cp-dialog-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    @media (max-width: 1024px) {
+      #careerpilot-landing-v3 .cp-product-window { width: 100%; }
+      #careerpilot-landing-v3 .cp-agent-head,
+      #careerpilot-landing-v3 .cp-prepare-head,
+      #careerpilot-landing-v3 .cp-organise-copy { grid-template-columns: 1fr; gap: 20px; }
+      #careerpilot-landing-v3 .cp-agent-head p,
+      #careerpilot-landing-v3 .cp-prepare-head p,
+      #careerpilot-landing-v3 .cp-organise-copy p { max-width: 680px; }
+      #careerpilot-landing-v3 .cp-agent-grid { grid-template-columns: 1fr; gap: 36px; }
+      #careerpilot-landing-v3 .cp-agent-stage { width: min(720px, 100%); margin: 0 auto; }
+      #careerpilot-landing-v3 .cp-resume-flow { grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-tailor-bridge { grid-template-columns: 1fr; justify-items: center; }
+      #careerpilot-landing-v3 .cp-tailor-arrow { width: 2px; height: 34px; }
+      #careerpilot-landing-v3 .cp-tailor-arrow::after { right: -4px; top: auto; bottom: 0; transform: rotate(135deg); }
+      #careerpilot-landing-v3 .cp-connections-layout { grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-cta { grid-template-columns: 1fr; gap: 32px; }
+      #careerpilot-landing-v3 .cp-cta-action { justify-self: start; }
+    }
+
+    @media (max-width: 768px) {
+      #careerpilot-landing-v3 .cp-hero { min-height: 0; padding: 64px 22px 0; }
+      #careerpilot-landing-v3 .cp-product-inner { grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-product-nav { display: none; }
+      #careerpilot-landing-v3 .cp-proof { grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-proof-item + .cp-proof-item { border-left: 0; border-top: 1px solid var(--cp-line); }
+      #careerpilot-landing-v3 .cp-transition { grid-template-columns: 1fr; gap: 14px; }
+      #careerpilot-landing-v3 .cp-track-columns { display: none; }
+      #careerpilot-landing-v3 .cp-track-item { grid-template-columns: minmax(0, 1fr) auto; }
+      #careerpilot-landing-v3 .cp-next-action { grid-column: 1; grid-row: 2; }
+      #careerpilot-landing-v3 .cp-next-action small { display: block; }
+      #careerpilot-landing-v3 .cp-status { grid-column: 2; grid-row: 1 / span 2; }
+    }
+
+    @media (max-width: 620px) {
+      #careerpilot-landing-v3 { --cp-gutter: 12px; }
+      #careerpilot-landing-v3 .cp-nav { min-height: 72px; grid-template-columns: auto minmax(0, 1fr); gap: 6px; }
+      #careerpilot-landing-v3 .cp-nav-spacer { display: none; }
+      #careerpilot-landing-v3 .cp-brand-word { font-size: 18px; }
+      #careerpilot-landing-v3 .cp-nav-actions { gap: 3px; }
+      #careerpilot-landing-v3 .cp-theme-toggle { display: none; }
+      #careerpilot-landing-v3 .cp-nav-actions .cp-button { min-height: 44px; padding: 0 10px; font-size: 11px; }
+      #careerpilot-landing-v3 .cp-nav-actions .cp-button-quiet { display: inline-flex; padding-inline: 7px; }
+      #careerpilot-landing-v3 .cp-hero { padding: 52px 16px 0; border-radius: 22px; }
+      #careerpilot-landing-v3 .cp-hero::before { display: none; }
+      #careerpilot-landing-v3 .cp-kicker { font-size: 11px; letter-spacing: .08em; }
+      #careerpilot-landing-v3 .cp-kicker-line { width: 18px; }
+      #careerpilot-landing-v3 h1 { margin-top: 22px; font-size: clamp(40px, 12vw, 49px); overflow-wrap: anywhere; }
+      #careerpilot-landing-v3 .cp-subhead { font-size: 15px; line-height: 1.65; }
+      #careerpilot-landing-v3 .cp-hero-actions { display: grid; grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-hero-actions .cp-button { width: 100%; }
+      #careerpilot-landing-v3 .cp-product-window { margin-top: 44px; padding: 8px; border-radius: 18px 18px 0 0; }
+      #careerpilot-landing-v3 .cp-brief-preview { padding: 16px; }
+      #careerpilot-landing-v3 .cp-brief-head { align-items: flex-start; }
+      #careerpilot-landing-v3 .cp-brief-summary span:last-child { display: none; }
+      #careerpilot-landing-v3 .cp-agent-job { padding: 15px; }
+      #careerpilot-landing-v3 .cp-agent-job-top { grid-template-columns: 42px minmax(0, 1fr); }
+      #careerpilot-landing-v3 .cp-agent-company { width: 42px; height: 42px; }
+      #careerpilot-landing-v3 .cp-agent-match { grid-column: 2; justify-self: start; min-width: 0; }
+      #careerpilot-landing-v3 .cp-fit-reasons { display: grid; grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-agent-job-actions { grid-template-columns: 1fr 1fr; }
+      #careerpilot-landing-v3 .cp-brief-reason { grid-template-columns: 1fr; gap: 5px; }
+      #careerpilot-landing-v3 .cp-agent-section { margin-top: 64px; padding: 64px 18px 58px; border-radius: 26px; }
+      #careerpilot-landing-v3 .cp-agent-head { margin-bottom: 34px; }
+      #careerpilot-landing-v3 .cp-agent-head h2,
+      #careerpilot-landing-v3 .cp-prepare-head h2,
+      #careerpilot-landing-v3 .cp-organise-copy h2 { font-size: 38px; }
+      #careerpilot-landing-v3 .cp-agent-head p,
+      #careerpilot-landing-v3 .cp-prepare-head p,
+      #careerpilot-landing-v3 .cp-organise-copy p { font-size: 15px; }
+      #careerpilot-landing-v3 .cp-agent-step { grid-template-columns: 38px minmax(0, 1fr) 24px; padding-right: 10px; }
+      #careerpilot-landing-v3 .cp-agent-step strong { font-size: 18px; }
+      #careerpilot-landing-v3 .cp-agent-screen { padding: 14px; }
+      #careerpilot-landing-v3 .cp-agent-screen-head { align-items: flex-start; }
+      #careerpilot-landing-v3 .cp-agent-screen-head .cp-pill { display: none; }
+      #careerpilot-landing-v3 .cp-transition { margin: 56px 10px 50px; padding-left: 18px; }
+      #careerpilot-landing-v3 .cp-transition h2 { font-size: 34px; }
+      #careerpilot-landing-v3 .cp-transition p { font-size: 15px; }
+      #careerpilot-landing-v3 .cp-prepare { padding: 64px 18px 68px; }
+      #careerpilot-landing-v3 .cp-feature-switch { display: grid; grid-template-columns: 1fr; }
+      #careerpilot-landing-v3 .cp-feature-stage { padding: 8px; border-radius: 20px; }
+      #careerpilot-landing-v3 .cp-feature-panel { min-height: 0; padding: 15px; }
+      #careerpilot-landing-v3 .cp-feature-panel-head { align-items: flex-start; }
+      #careerpilot-landing-v3 #cp-connections-feature .cp-feature-panel-head { flex-direction: column; }
+      #careerpilot-landing-v3 .cp-resume-source { padding: 13px; }
+      #careerpilot-landing-v3 .cp-tailored-actions .cp-product-action { width: 100%; }
+      #careerpilot-landing-v3 .cp-connection-row { grid-template-columns: 42px minmax(0, 1fr); }
+      #careerpilot-landing-v3 .cp-connection-action { grid-column: 2; justify-self: start; }
+      #careerpilot-landing-v3 .cp-import-note { grid-template-columns: 1fr; gap: 12px; }
+      #careerpilot-landing-v3 .cp-import-note .cp-connection-action { grid-column: 1; }
+      #careerpilot-landing-v3 .cp-connection-match-full { display: none; }
+      #careerpilot-landing-v3 .cp-connection-match-short { display: inline; }
+      #careerpilot-landing-v3 .cp-organise { margin-top: 68px; padding: 0 8px 24px; }
+      #careerpilot-landing-v3 .cp-organise-copy { margin-bottom: 30px; }
+      #careerpilot-landing-v3 .cp-tracker { padding: 14px; border-radius: 18px; }
+      #careerpilot-landing-v3 .cp-tracker-top { align-items: flex-start; }
+      #careerpilot-landing-v3 .cp-track-item { grid-template-columns: 1fr; gap: 8px; }
+      #careerpilot-landing-v3 .cp-next-action,
+      #careerpilot-landing-v3 .cp-status { grid-column: 1; grid-row: auto; justify-self: start; min-width: 0; }
+      #careerpilot-landing-v3 .cp-cta { margin-top: 56px; padding: 54px 22px; border-radius: 26px; text-align: center; }
+      #careerpilot-landing-v3 .cp-cta h2 { font-size: 40px; }
+      #careerpilot-landing-v3 .cp-cta-action { justify-self: stretch; width: 100%; }
+      #careerpilot-landing-v3 .cp-footer { flex-direction: column; align-items: flex-start; }
+      #careerpilot-landing-v3 .cp-dialog-card { padding: 22px; }
+    }
+
+    @media (max-width: 390px) {
+      #careerpilot-landing-v3 .cp-brand-word { font-size: 17px; }
+      #careerpilot-landing-v3 .cp-nav { gap: 4px; }
+      #careerpilot-landing-v3 .cp-nav-actions { gap: 1px; }
+      #careerpilot-landing-v3 .cp-nav-actions .cp-button { padding-inline: 7px; }
+      #careerpilot-landing-v3 .cp-nav-actions .cp-button-quiet { padding-inline: 5px; }
+      #careerpilot-landing-v3 .cp-header-cta .cp-header-cta-full { display: none; }
+      #careerpilot-landing-v3 .cp-header-cta .cp-header-cta-short { display: inline; }
+    }
+
+    #careerpilot-landing-v3 .cp-header-cta-short { display: none; }
+
+    @media (prefers-reduced-motion: reduce) {
+      #careerpilot-landing-v3 *,
+      #careerpilot-landing-v3 *::before,
+      #careerpilot-landing-v3 *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+      #careerpilot-landing-v3 .cp-button:hover { transform: none; }
+    }
+  </style>
+
+  <div class="cp-wrap">
+    <header class="cp-nav" id="cp-top">
+      <a class="cp-brand" href="#cp-top" aria-label="CareerPilot home">
+        <span class="cp-brand-word" aria-hidden="true"><span class="cp-word-career">Career</span><span class="cp-word-pilot">Pil<span class="cp-word-o"></span>t</span></span>
+      </a>
+      <span class="cp-nav-spacer" aria-hidden="true"></span>
+      <div class="cp-nav-actions">
+        <button class="cp-button cp-button-quiet" type="button" data-cp-signin>Sign in</button>
+        <button class="cp-button cp-button-primary cp-header-cta" type="button" data-cp-start aria-label="Get my Daily Brief"><span class="cp-header-cta-full">Get my Daily Brief</span><span class="cp-header-cta-short" aria-hidden="true">Get my Brief</span></button>
+        <button class="cp-theme-toggle" type="button" data-cp-theme aria-label="Switch to dark preview" aria-pressed="false"><span class="cp-theme-symbol" aria-hidden="true"></span></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="cp-hero" aria-labelledby="cp-hero-title">
+        <div class="cp-hero-copy">
+          <div class="cp-kicker"><span class="cp-kicker-line" aria-hidden="true"></span>FOCUSED JOB SEARCH FOR TECH PROFESSIONALS</div>
+          <h1 id="cp-hero-title">The right tech roles, <em>without</em> the endless search.</h1>
+          <p class="cp-subhead">Tell CareerPilot what you're looking for once. Get a focused Daily Brief of relevant, active tech roles instead of searching job boards every day.</p>
+          <div class="cp-hero-actions">
+            <button class="cp-button cp-button-primary" type="button" data-cp-start>Get my Daily Brief</button>
+            <button class="cp-button" type="button" data-cp-scroll>See how it works</button>
+          </div>
+          <p class="cp-helper">About 2 minutes to set up</p>
+        </div>
+
+        <div class="cp-product-window" aria-label="Example Daily Brief preview">
+          <div class="cp-product-inner">
+            <aside class="cp-product-nav" aria-label="Product preview navigation">
+              <span class="cp-brand cp-brand-compact" aria-hidden="true"><span class="cp-brand-word"><span class="cp-word-career">Career</span><span class="cp-word-pilot">Pil<span class="cp-word-o"></span>t</span></span></span>
+              <div class="cp-product-link is-active">Daily Brief</div>
+              <div class="cp-product-link">Tracker</div>
+              <div class="cp-product-link">Resume</div>
+              <div class="cp-product-link">Connections</div>
+            </aside>
+            <div class="cp-brief-preview">
+              <div class="cp-brief-head">
+                <div><span class="cp-brief-date">TODAY'S DAILY BRIEF · CHECKED 10:00 IST</span><h2>Your strongest roles today</h2></div>
+                <div class="cp-brief-summary"><span class="cp-brief-count">7</span><span>active roles</span></div>
+              </div>
+              <article class="cp-agent-job cp-home-job">
+                <div class="cp-agent-job-top">
+                  <div class="cp-agent-company">AR</div>
+                  <div><h3>Product Manager</h3><p>Arcesium · Bengaluru · Hybrid</p></div>
+                  <span class="cp-agent-match"><strong>Strong fit</strong><small>3 clear reasons</small></span>
+                </div>
+                <div class="cp-fit-reasons"><span>Platform product experience</span><span>Bengaluru preference</span><span>Hybrid preference</span></div>
+                <div class="cp-agent-job-meta"><span>Active role</span><span>Posted today</span><span>3 connections at this company</span></div>
+                <div class="cp-agent-job-actions" aria-label="Example product actions"><span class="cp-product-action">Not Interested</span><span class="cp-product-action is-primary">View details</span></div>
+              </article>
+              <div class="cp-brief-reason"><strong>WHY THIS ROLE</strong><span>Your platform-product experience is directly relevant, and the role matches both your location and work-style preferences.</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cp-proof" aria-label="Why the Daily Brief is different">
+        <article class="cp-proof-item"><span class="cp-proof-kicker">ACTIVE ROLE CHECKS</span><strong>Fewer expired roles in your brief.</strong><p>CareerPilot checks application links to reduce expired roles in your Daily Brief.</p></article>
+        <article class="cp-proof-item"><span class="cp-proof-kicker">FOCUSED DAILY BRIEF</span><strong>Up to ten. Never endless.</strong><p>Strong opportunities stay visible instead of disappearing into an infinite feed.</p></article>
+        <article class="cp-proof-item"><span class="cp-proof-kicker">PRIVATE BY DEFAULT</span><strong>Your search stays in your control.</strong><p>Your profile isn't public, and you stay in control of your job-search information.</p></article>
+      </section>
+
+      <section class="cp-agent-section" id="cp-how-it-works" aria-labelledby="cp-agent-title">
+        <div class="cp-agent-head">
+          <div><div class="cp-label">HOW CAREERPILOT WORKS</div><h2 id="cp-agent-title">Set your search once. See the <span class="cp-heading-accent">strongest roles</span> each day.</h2></div>
+          <p><strong>Sherpa</strong> handles the repeated search work while keeping every decision in your hands.</p>
+        </div>
+        <div class="cp-agent-grid">
+          <div class="cp-agent-steps" aria-label="How Sherpa helps">
+            <button class="cp-agent-step is-active" type="button" data-cp-agent-step="context" aria-expanded="true"><span class="cp-agent-step-number">01</span><strong>Bring your experience</strong><span class="cp-agent-chevron" aria-hidden="true"></span><span class="cp-agent-step-copy">Add your existing resume. CareerPilot uses the work you have already done instead of asking you to type it again.</span></button>
+            <button class="cp-agent-step" type="button" data-cp-agent-step="brief" aria-expanded="false"><span class="cp-agent-step-number">02</span><strong>Shape the search once</strong><span class="cp-agent-chevron" aria-hidden="true"></span><span class="cp-agent-step-copy">Choose target roles, skills, locations, work style, and delivery time. Sherpa checks against those preferences each day.</span></button>
+            <button class="cp-agent-step" type="button" data-cp-agent-step="confidence" aria-expanded="false"><span class="cp-agent-step-number">03</span><strong>Review only what matters</strong><span class="cp-agent-chevron" aria-hidden="true"></span><span class="cp-agent-step-copy">Inspect the evidence, open full details, hold a role, or mark it Not Interested. You stay in control.</span></button>
+          </div>
+          <div class="cp-agent-stage" aria-label="Interactive example of how Sherpa turns experience into a job decision">
+            <div class="cp-agent-screen">
+              <div class="cp-agent-screen-head"><div class="cp-agent-screen-heading"><span class="cp-agent-screen-kicker">SHERPA'S READ</span><strong data-cp-agent-preview-title>Your experience, understood.</strong></div><span class="cp-pill">Sample view</span></div>
+              <article class="cp-agent-job">
+                <div class="cp-agent-job-top"><div class="cp-agent-company">AR</div><div><h3>Product Manager</h3><p>Arcesium · Bengaluru · Hybrid</p></div><span class="cp-agent-match"><strong>Strong fit</strong><small>Reasons shown</small></span></div>
+                <div class="cp-fit-reasons"><span data-cp-agent-reason>Platform product experience</span><span data-cp-agent-reason>B2B product context</span><span data-cp-agent-reason>Leadership evidence</span></div>
+                <div class="cp-agent-job-meta"><span>Active role</span><span>Posted today</span><span>3 connections at this company</span></div>
+                <div class="cp-agent-job-actions" aria-label="Example product actions"><span class="cp-product-action">Not Interested</span><span class="cp-product-action is-primary">View details</span></div>
+              </article>
+              <div class="cp-agent-note"><span class="cp-agent-avatar" aria-hidden="true">S</span><div><span class="cp-agent-note-kicker">WHY SHERPA SURFACED IT</span><strong data-cp-agent-note-title>Strong platform-product evidence</strong><p data-cp-agent-note>Your resume shows repeated ownership of platform strategy, cross-functional delivery, and B2B product decisions.</p></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cp-transition" aria-labelledby="cp-transition-title"><h2 id="cp-transition-title">Found a role worth pursuing?</h2><p>Sherpa can help prepare the application too.</p></section>
+
+      <section class="cp-prepare" id="cp-prepare-to-apply" aria-labelledby="cp-prepare-title">
+        <div class="cp-prepare-head">
+          <div><div class="cp-label">WHEN A ROLE IS WORTH PURSUING</div><h2 id="cp-prepare-title">Prepare a <span class="cp-heading-accent">stronger application</span> without starting again.</h2></div>
+          <p><strong>Sherpa uses AI</strong> to tailor your resume from your real experience and matches your imported LinkedIn connections to the company.</p>
+        </div>
+
+        <div class="cp-feature-switch" role="tablist" aria-label="Application preparation features">
+          <button class="cp-feature-option" id="cp-resume-tab" type="button" role="tab" data-cp-feature="resume" aria-selected="true" aria-controls="cp-resume-feature"><span>AI-tailor my resume</span><small>Grounded in my real experience</small></button>
+          <button class="cp-feature-option" id="cp-connections-tab" type="button" role="tab" data-cp-feature="connections" aria-selected="false" aria-controls="cp-connections-feature" tabindex="-1"><span>See who you already know</span><small>Your imported 1st-degree LinkedIn connections</small></button>
+        </div>
+
+        <div class="cp-feature-stage">
+          <div class="cp-feature-panel" id="cp-resume-feature" data-cp-feature-panel="resume" role="tabpanel" aria-labelledby="cp-resume-tab">
+            <div class="cp-feature-panel-head"><strong>AI-tailored. Grounded in your real experience.</strong><span class="cp-pill">Sample view</span></div>
+            <div class="cp-resume-flow">
+              <div class="cp-resume-sources">
+                <article class="cp-resume-source"><span class="cp-resume-source-mark">MR</span><div><strong>Master Resume</strong><p>Your complete experience</p></div><span class="cp-pill">Evidence source</span></article>
+                <article class="cp-resume-source"><span class="cp-resume-source-mark">PR</span><div><strong>Primary Resume</strong><p>Your preferred resume + format</p></div><span class="cp-pill">Format source</span></article>
+              </div>
+              <div class="cp-tailor-bridge"><span class="cp-ai-node"><strong>Sherpa AI</strong><small>Selects evidence</small></span><span class="cp-tailor-arrow" aria-hidden="true"></span><span>Relevant experience in your preferred format</span></div>
+              <article class="cp-tailored-resume">
+                <div><div class="cp-tailored-resume-top"><span class="cp-label">TAILORED RESUME</span><span class="cp-pill">Draft ready</span></div><h3>Product Manager · Arcesium</h3><div class="cp-tailored-list"><span>Relevant achievements prioritised</span><span>Job-specific summary strengthened</span><span>Preferred format preserved</span></div></div>
+                <div class="cp-grounded"><strong>Grounded in your experience</strong><span>Sherpa never invents achievements, skills, or work history.</span></div>
+                <div class="cp-tailored-actions"><span class="cp-product-action">Preview tailored resume</span></div>
+              </article>
+            </div>
+          </div>
+
+          <div class="cp-feature-panel" id="cp-connections-feature" data-cp-feature-panel="connections" role="tabpanel" aria-labelledby="cp-connections-tab" hidden>
+            <div class="cp-feature-panel-head"><strong>See who you already know at this company.</strong><span class="cp-pill"><span class="cp-connection-match-full">3 matches from your LinkedIn import</span><span class="cp-connection-match-short">3 imported connections</span></span></div>
+            <div class="cp-connections-layout">
+              <article class="cp-connection-role"><div><span class="cp-connection-role-mark">AR</span><h3>Product Manager</h3><p>Arcesium · Bengaluru · Hybrid</p></div><div class="cp-linkedin-label"><span class="cp-linkedin-mark" aria-hidden="true">in</span><span><small>YOUR IMPORTED NETWORK</small><strong>3 connections at Arcesium</strong></span></div></article>
+              <div class="cp-connection-list">
+                <article class="cp-connection-row"><span class="cp-connection-avatar">PS</span><div><strong>Priya S.</strong><p>Senior Product Manager · 1st-degree connection</p></div><span class="cp-connection-action">View connection</span></article>
+                <article class="cp-connection-row"><span class="cp-connection-avatar">RM</span><div><strong>Rahul M.</strong><p>Engineering Manager · 1st-degree connection</p></div><span class="cp-connection-action">View connection</span></article>
+                <article class="cp-connection-row"><span class="cp-connection-avatar">NK</span><div><strong>Neha K.</strong><p>Product Analyst · 1st-degree connection</p></div><span class="cp-connection-action">View connection</span></article>
+                <p class="cp-connections-note">Matches come from your imported 1st-degree LinkedIn connections. You choose whether and how to reach out.</p>
+              </div>
+            </div>
+            <div class="cp-import-note"><div><strong>Import your LinkedIn connections</strong><p>Upload your LinkedIn connections export once. CareerPilot matches your 1st-degree connections to companies in your Daily Brief.</p></div><span class="cp-connection-action">Upload LinkedIn connections</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cp-organise" aria-labelledby="cp-organise-title">
+        <div class="cp-organise-copy"><div><div class="cp-label">AFTER YOU DECIDE</div><h2 id="cp-organise-title">Know what needs your <span class="cp-heading-accent">attention next.</span></h2></div><p>CareerPilot keeps the next useful action beside every role, so your tracker is a decision aid rather than a storage list.</p></div>
+        <div class="cp-tracker" aria-label="Example job tracker">
+          <div class="cp-tracker-top"><strong>Application tracker</strong><span class="cp-pill">Sample view</span></div>
+          <div class="cp-track-filters" aria-label="Example tracker statuses">
+            <span class="cp-track-filter is-active">All</span><span class="cp-track-filter">Applied</span><span class="cp-track-filter">Shortlisted</span><span class="cp-track-filter">Interview</span><span class="cp-track-filter">Offer</span><span class="cp-track-filter">On Hold</span><span class="cp-track-filter">Not Interested</span><span class="cp-track-filter">Employer Rejection</span>
+          </div>
+          <div class="cp-track-columns" aria-hidden="true"><span>ROLE / LAST UPDATE</span><span>NEXT ACTION</span><span>STATUS</span></div>
+          <div class="cp-track-list">
+            <div class="cp-track-item"><div><strong>Data Product Manager · NovaCart</strong><span>Interview stage</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Interview tomorrow</strong></div><span class="cp-pill cp-status">Interview</span></div>
+            <div class="cp-track-item"><div><strong>Product Manager · Arcesium</strong><span>Applied 5 days ago</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Follow up today</strong></div><span class="cp-pill cp-status">Applied</span></div>
+            <div class="cp-track-item"><div><strong>Senior Product Manager · CloudSEK</strong><span>Shortlisted yesterday</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Waiting for response</strong></div><span class="cp-pill cp-status">Shortlisted</span></div>
+            <div class="cp-track-item"><div><strong>Product Lead · FinBox</strong><span>Offer received today</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Review offer details</strong></div><span class="cp-pill cp-status">Offer</span></div>
+            <div class="cp-track-item"><div><strong>Business Analyst · Capco</strong><span>Saved yesterday</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Saved for later</strong></div><span class="cp-pill cp-status">On Hold</span></div>
+            <div class="cp-track-item"><div><strong>Product Manager · KRAFTON India</strong><span>Decision recorded 30 Aug</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>No action needed</strong></div><span class="cp-pill cp-status">Not Interested</span></div>
+            <div class="cp-track-item"><div><strong>Platform PM · Razorpay</strong><span>Updated 29 Aug</span></div><div class="cp-next-action"><small>NEXT ACTION</small><strong>Role closed</strong></div><span class="cp-pill cp-status is-rejected">Employer Rejection</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="cp-cta" aria-labelledby="cp-final-cta-title">
+        <div class="cp-cta-copy"><div class="cp-cta-label">YOUR NEXT BRIEF</div><h2 id="cp-final-cta-title">Your next job search deserves <em>a smaller to-do list.</em></h2><p>Add your experience and preferences once. Sherpa will prepare your first focused Daily Brief.</p></div>
+        <div class="cp-cta-action"><button class="cp-button cp-button-primary" type="button" data-cp-start>Get my Daily Brief <span class="cp-cta-arrow" aria-hidden="true">→</span></button><span class="cp-cta-note">About 2 minutes to set up</span></div>
+      </section>
+    </main>
+
+    <!-- Production: replace these placeholder policy and contact links with verified destinations before launch. -->
+    <footer class="cp-footer"><a class="cp-brand cp-brand-compact" href="#cp-top" aria-label="CareerPilot home"><span class="cp-brand-word" aria-hidden="true"><span class="cp-word-career">Career</span><span class="cp-word-pilot">Pil<span class="cp-word-o"></span>t</span></span></a><nav class="cp-footer-links" aria-label="Footer"><a href="#privacy">Privacy</a><a href="#terms">Terms</a><a href="#contact">Contact</a></nav></footer>
+  </div>
+
+  <dialog class="cp-dialog" data-cp-dialog aria-labelledby="cp-dialog-title" aria-describedby="cp-dialog-copy">
+    <div class="cp-dialog-card">
+      <h2 id="cp-dialog-title" data-cp-dialog-title>Get your Daily Brief</h2>
+      <p id="cp-dialog-copy" data-cp-dialog-copy>Add your experience and job preferences once. CareerPilot will use them to prepare a focused brief of relevant, active roles.</p>
+      <div class="cp-dialog-actions"><button class="cp-button cp-button-primary" type="button" data-cp-dialog-confirm>Get my Daily Brief</button><button class="cp-button" type="button" data-cp-dialog-close>Cancel</button></div>
+    </div>
+  </dialog>
+  <div class="cp-sr-only" aria-live="polite" data-cp-live></div>
+
+  <script>
+    (() => {
+      const root = document.getElementById('careerpilot-landing-v3');
+      const dialog = root.querySelector('[data-cp-dialog]');
+      const dialogTitle = root.querySelector('[data-cp-dialog-title]');
+      const dialogCopy = root.querySelector('[data-cp-dialog-copy]');
+      const dialogConfirm = root.querySelector('[data-cp-dialog-confirm]');
+      const dialogClose = root.querySelector('[data-cp-dialog-close]');
+      const live = root.querySelector('[data-cp-live]');
+      const nav = root.querySelector('.cp-nav');
+      const themeToggle = root.querySelector('[data-cp-theme]');
+      const themeStorageKey = 'careerpilot:theme';
+      const agentPreviewTitle = root.querySelector('[data-cp-agent-preview-title]');
+      const agentNoteTitle = root.querySelector('[data-cp-agent-note-title]');
+      const agentNote = root.querySelector('[data-cp-agent-note]');
+      const agentReasonItems = [...root.querySelectorAll('[data-cp-agent-reason]')];
+      let lastDialogTrigger = null;
+
+      const agentStates = {
+        context: {
+          preview: 'Your experience, understood.',
+          title: 'Strong platform-product evidence',
+          note: 'Your resume shows repeated ownership of platform strategy, cross-functional delivery, and B2B product decisions.',
+          reasons: ['Platform product experience', 'B2B product context', 'Leadership evidence']
+        },
+        brief: {
+          preview: 'Your Daily Brief, ranked for you.',
+          title: 'Why this role made today\'s brief',
+          note: 'The role is active, newly posted, and aligned with the location and work-style preferences you set once.',
+          reasons: ['Active today', 'Bengaluru preference', 'Hybrid preference']
+        },
+        confidence: {
+          preview: 'Context before you decide.',
+          title: 'What you can inspect next',
+          note: 'Open the full details to review responsibilities, salary, company context, and connections from your import before choosing Apply, Hold, or Not Interested.',
+          reasons: ['Responsibilities', 'Salary context', '3 imported connections']
+        }
+      };
+
+      const syncHeader = () => nav.classList.toggle('is-scrolled', window.scrollY > 28);
+      window.addEventListener('scroll', syncHeader, { passive: true });
+      syncHeader();
+
+      const openDialog = (mode, trigger) => {
+        lastDialogTrigger = trigger || document.activeElement;
+        if (mode === 'signin') {
+          dialogTitle.textContent = 'Sign in to CareerPilot';
+          dialogCopy.textContent = "Continue your setup or return to today's Daily Brief.";
+          dialogConfirm.textContent = 'Continue to sign in';
+        } else {
+          dialogTitle.textContent = 'Get your Daily Brief';
+          dialogCopy.textContent = 'Add your experience and job preferences once. CareerPilot will use them to prepare a focused brief of relevant, active roles.';
+          dialogConfirm.textContent = 'Get my Daily Brief';
+        }
+        dialog.showModal();
+        dialogConfirm.focus();
+      };
+
+      const closeDialog = (message) => {
+        dialog.close();
+        live.textContent = message;
+      };
+
+      root.querySelectorAll('[data-cp-start]').forEach((button) => button.addEventListener('click', () => openDialog('start', button)));
+      root.querySelector('[data-cp-signin]').addEventListener('click', (event) => openDialog('signin', event.currentTarget));
+      dialogClose.addEventListener('click', () => closeDialog('Dialog closed'));
+      dialogConfirm.addEventListener('click', () => closeDialog('The next screen would start the selected CareerPilot flow.'));
+      dialog.addEventListener('click', (event) => { if (event.target === dialog) closeDialog('Dialog closed'); });
+      dialog.addEventListener('cancel', () => { live.textContent = 'Dialog closed'; });
+      dialog.addEventListener('close', () => { if (lastDialogTrigger && typeof lastDialogTrigger.focus === 'function') lastDialogTrigger.focus(); });
+      dialog.addEventListener('keydown', (event) => {
+        if (event.key !== 'Tab') return;
+        const controls = [...dialog.querySelectorAll('button:not([disabled]), a[href]')];
+        if (!controls.length) return;
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
+
+      root.querySelector('[data-cp-scroll]').addEventListener('click', () => root.querySelector('#cp-how-it-works').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
+      const applyTheme = (theme) => {
+        const isDark = theme === 'dark';
+        root.dataset.productTheme = theme;
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme;
+        themeToggle.setAttribute('aria-label', isDark ? 'Switch to light mode' : 'Switch to dark mode');
+        themeToggle.setAttribute('aria-pressed', String(isDark));
+      };
+      let savedTheme = 'light';
+      try { savedTheme = localStorage.getItem(themeStorageKey) || savedTheme; } catch (_) {}
+      applyTheme(savedTheme === 'dark' ? 'dark' : 'light');
+      themeToggle.addEventListener('click', () => {
+        const nextTheme = root.dataset.productTheme === 'dark' ? 'light' : 'dark';
+        applyTheme(nextTheme);
+        try { localStorage.setItem(themeStorageKey, nextTheme); } catch (_) {}
+        live.textContent = `${nextTheme === 'dark' ? 'Dark' : 'Light'} mode selected`;
+      });
+
+      root.querySelectorAll('[data-cp-agent-step]').forEach((button) => button.addEventListener('click', () => {
+        const content = agentStates[button.dataset.cpAgentStep];
+        root.querySelectorAll('[data-cp-agent-step]').forEach((item) => {
+          const active = item === button;
+          item.classList.toggle('is-active', active);
+          item.setAttribute('aria-expanded', String(active));
+        });
+        agentPreviewTitle.textContent = content.preview;
+        agentNoteTitle.textContent = content.title;
+        agentNote.textContent = content.note;
+        agentReasonItems.forEach((item, index) => { item.textContent = content.reasons[index]; });
+        live.textContent = `${button.querySelector('strong').textContent} selected`;
+      }));
+
+      const activateFeature = (button, moveFocus = false) => {
+        const feature = button.dataset.cpFeature;
+        root.querySelectorAll('[data-cp-feature]').forEach((item) => {
+          const active = item === button;
+          item.setAttribute('aria-selected', String(active));
+          item.tabIndex = active ? 0 : -1;
+        });
+        root.querySelectorAll('[data-cp-feature-panel]').forEach((panel) => { panel.hidden = panel.dataset.cpFeaturePanel !== feature; });
+        if (moveFocus) button.focus();
+        live.textContent = `${button.querySelector('span').textContent} selected`;
+      };
+
+      const featureTabs = [...root.querySelectorAll('[data-cp-feature]')];
+      const featureTablist = root.querySelector('[role="tablist"]');
+      const stackedFeatureTabs = matchMedia('(max-width: 620px)');
+      const syncFeatureOrientation = () => featureTablist.setAttribute('aria-orientation', stackedFeatureTabs.matches ? 'vertical' : 'horizontal');
+      syncFeatureOrientation();
+      if (typeof stackedFeatureTabs.addEventListener === 'function') stackedFeatureTabs.addEventListener('change', syncFeatureOrientation);
+      featureTabs.forEach((button, index) => {
+        button.addEventListener('click', () => activateFeature(button));
+        button.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          let nextIndex = index;
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % featureTabs.length;
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + featureTabs.length) % featureTabs.length;
+          if (event.key === 'Home') nextIndex = 0;
+          if (event.key === 'End') nextIndex = featureTabs.length - 1;
+          activateFeature(featureTabs[nextIndex], true);
+        });
+      });
+
+    })();
+  </script>
+</div>
+
+<script src="https://unpkg.com/@floating-ui/core@1.7.3/dist/floating-ui.core.umd.min.js"></script>
+<script src="https://unpkg.com/@floating-ui/dom@1.7.4/dist/floating-ui.dom.umd.min.js"></script>
+<script>
+(() => {
+  if (window.FloatingUIDOM == null) {
+    return;
+  }
+  const { autoUpdate, computePosition, flip, offset, shift, size } =
+    window.FloatingUIDOM;
+  const tooltipPlacements = new Set(["top", "right", "bottom", "left"]);
+  const tooltipId = `codex-visualization-tooltip-${
+    window.crypto?.randomUUID?.() ?? Date.now().toString(36)
+  }`;
+  const tooltipGap = 5;
+  const hoverDelay = 700;
+  const skipDelay = 300;
+  let activeTrigger = null;
+  let pendingTrigger = null;
+  let tooltip = null;
+  let openTimeout = null;
+  let autoUpdateCleanup = null;
+  let positionRequest = 0;
+  let skipDelayUntil = 0;
+  let lastPointerWasTouch = false;
+  let pinnedByTouch = false;
+
+  const getTrigger = (target) =>
+    target?.nodeType === Node.ELEMENT_NODE
+      ? target.closest("[data-tooltip]")
+      : null;
+  const containsTarget = (trigger, target) =>
+    target?.nodeType != null && trigger.contains(target);
+  const getContent = (trigger) =>
+    trigger.getAttribute("data-tooltip")?.trim() ?? "";
+  const getPlacement = (trigger) => {
+    const placement = trigger.getAttribute("data-tooltip-placement");
+    return tooltipPlacements.has(placement) ? placement : "top";
+  };
+  const getTooltip = () => {
+    if (tooltip == null) {
+      tooltip = document.createElement("div");
+      tooltip.id = tooltipId;
+      tooltip.className = "tooltip";
+      tooltip.setAttribute("role", "tooltip");
+    }
+    return tooltip;
+  };
+  const setDescribedBy = (trigger, described) => {
+    const ids = new Set(
+      (trigger.getAttribute("aria-describedby") ?? "")
+        .split(/\s+/)
+        .filter(Boolean),
+    );
+    if (described) {
+      ids.add(tooltipId);
+    } else {
+      ids.delete(tooltipId);
+    }
+    if (ids.size === 0) {
+      trigger.removeAttribute("aria-describedby");
+    } else {
+      trigger.setAttribute("aria-describedby", [...ids].join(" "));
+    }
+  };
+  const clearOpenTimeout = () => {
+    if (openTimeout != null) {
+      window.clearTimeout(openTimeout);
+      openTimeout = null;
+    }
+    pendingTrigger = null;
+  };
+  const closeTooltip = (activateSkipDelay = true) => {
+    clearOpenTimeout();
+    pinnedByTouch = false;
+    positionRequest += 1;
+    autoUpdateCleanup?.();
+    autoUpdateCleanup = null;
+    if (activeTrigger == null) {
+      return;
+    }
+    setDescribedBy(activeTrigger, false);
+    activeTrigger = null;
+    tooltip?.remove();
+    if (activateSkipDelay) {
+      skipDelayUntil = Date.now() + skipDelay;
+    }
+  };
+  const updatePosition = (trigger, floating) => {
+    const request = ++positionRequest;
+    void computePosition(trigger, floating, {
+      middleware: [
+        offset(tooltipGap),
+        flip({ padding: tooltipGap }),
+        shift({ padding: tooltipGap }),
+        size({
+          padding: tooltipGap,
+          apply({ availableHeight, availableWidth, elements }) {
+            elements.floating.style.setProperty(
+              "--tooltip-available-width",
+              `${Math.max(0, availableWidth)}px`,
+            );
+            elements.floating.style.setProperty(
+              "--tooltip-available-height",
+              `${Math.max(0, availableHeight)}px`,
+            );
+          },
+        }),
+      ],
+      placement: getPlacement(trigger),
+      strategy: "fixed",
+    })
+      .then(({ x, y }) => {
+        if (activeTrigger !== trigger || request !== positionRequest) {
+          return;
+        }
+        const scale = window.devicePixelRatio || 1;
+        floating.style.transform = `translate(${Math.round(x * scale) / scale}px, ${Math.round(y * scale) / scale}px)`;
+        floating.style.visibility = "visible";
+      })
+      .catch(() => {
+        if (activeTrigger === trigger && request === positionRequest) {
+          closeTooltip(false);
+        }
+      });
+  };
+  const openTooltip = (trigger) => {
+    const content = getContent(trigger);
+    if (!trigger.isConnected || content.length === 0) {
+      return;
+    }
+    clearOpenTimeout();
+    if (activeTrigger === trigger) {
+      return;
+    }
+    closeTooltip();
+    const floating = getTooltip();
+    floating.textContent = content;
+    floating.style.visibility = "hidden";
+    floating.style.transform = "translate(0, 0)";
+    document.body.appendChild(floating);
+    activeTrigger = trigger;
+    setDescribedBy(trigger, true);
+    autoUpdateCleanup = autoUpdate(trigger, floating, () => {
+      updatePosition(trigger, floating);
+    });
+  };
+  const requestOpen = (trigger, immediate = false) => {
+    if (
+      getContent(trigger).length === 0 ||
+      activeTrigger === trigger ||
+      pendingTrigger === trigger
+    ) {
+      return;
+    }
+    clearOpenTimeout();
+    pendingTrigger = trigger;
+    const delay =
+      immediate || activeTrigger != null || Date.now() < skipDelayUntil
+        ? 0
+        : hoverDelay;
+    if (delay === 0) {
+      openTooltip(trigger);
+      return;
+    }
+    openTimeout = window.setTimeout(() => {
+      openTimeout = null;
+      pendingTrigger = null;
+      openTooltip(trigger);
+    }, delay);
+  };
+  const handlePointerOpen = (event) => {
+    if (event.pointerType === "touch") {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    requestOpen(trigger);
+  };
+  const handlePointer = (event) => {
+    lastPointerWasTouch =
+      event.type === "pointerdown" && event.pointerType === "touch";
+  };
+  const handleTouchClick = (event) => {
+    const isTouch = event.pointerType === "touch" || lastPointerWasTouch;
+    lastPointerWasTouch = false;
+    if (!isTouch || event.detail === 0) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (
+      trigger == null ||
+      !trigger.isConnected ||
+      getContent(trigger).length === 0 ||
+      (pinnedByTouch && activeTrigger === trigger)
+    ) {
+      if (pinnedByTouch) {
+        closeTooltip();
+      }
+      return;
+    }
+    openTooltip(trigger);
+    pinnedByTouch = activeTrigger === trigger;
+    window.setTimeout(() => {
+      if (activeTrigger === trigger && !trigger.isConnected) {
+        closeTooltip(false);
+      }
+    }, 0);
+  };
+  const handleLeave = (event) => {
+    if (pinnedByTouch) {
+      return;
+    }
+    const trigger = getTrigger(event.target);
+    if (trigger == null || containsTarget(trigger, event.relatedTarget)) {
+      return;
+    }
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const handleFocusIn = (event) => {
+    const trigger = getTrigger(event.target);
+    if (trigger?.matches(":focus-visible")) {
+      requestOpen(trigger, true);
+    }
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") {
+      closeTooltip();
+    }
+  };
+  const handleContextMenu = (event) => {
+    lastPointerWasTouch = false;
+    const trigger = getTrigger(event.target);
+    if (activeTrigger === trigger || pendingTrigger === trigger) {
+      closeTooltip();
+    }
+  };
+  const destroy = () => {
+    closeTooltip(false);
+    lastPointerWasTouch = false;
+    document.removeEventListener("pointerover", handlePointerOpen);
+    document.removeEventListener("pointerdown", handlePointer);
+    document.removeEventListener("pointercancel", handlePointer);
+    document.removeEventListener("click", handleTouchClick);
+    document.removeEventListener("pointerout", handleLeave);
+    document.removeEventListener("focusin", handleFocusIn);
+    document.removeEventListener("focusout", handleLeave);
+    document.removeEventListener("keydown", handleKeyDown);
+    document.removeEventListener("contextmenu", handleContextMenu);
+    tooltip = null;
+  };
+
+  document.addEventListener("pointerover", handlePointerOpen);
+  document.addEventListener("pointerdown", handlePointer);
+  document.addEventListener("pointercancel", handlePointer);
+  document.addEventListener("click", handleTouchClick);
+  document.addEventListener("pointerout", handleLeave);
+  document.addEventListener("focusin", handleFocusIn);
+  document.addEventListener("focusout", handleLeave);
+  document.addEventListener("keydown", handleKeyDown);
+  document.addEventListener("contextmenu", handleContextMenu);
+  window.addEventListener("pagehide", destroy, { once: true });
+})();
+</script>
+<script id="codex-visualization-lucide" async src="https://unpkg.com/lucide@1.17.0/dist/umd/lucide.js"></script>
+<script>
+(() => {
+  const initialize = () => {
+    globalThis.lucide?.createIcons({ attrs: { width: 16, height: 16 } });
+  };
+  if (globalThis.lucide != null) {
+    initialize();
+    return;
+  }
+  document
+    .getElementById("codex-visualization-lucide")
+    ?.addEventListener("load", initialize, { once: true });
+})();
+</script>
+
+<script>document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target.closest("[data-cp-start],[data-cp-signin]"):null;if(!target)return;e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({type:"careerpilot:landing-action",action:target.hasAttribute("data-cp-signin")?"sign_in":"get_started"},window.location.origin)},true);</script></body>
+</html>

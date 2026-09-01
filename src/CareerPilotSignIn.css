@@ -1,0 +1,10 @@
+.careerpilot-sign-in-frame {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: block;
+  width: 100vw;
+  height: 100dvh;
+  border: 0;
+  background: #f6f7f2;
+}

@@ -1,3 +1,5 @@
+import type { PreferenceAlignment } from './professionalFit'
+
 export type LiveSearchPreferences = {
   roles: string[];
   skills: string;
@@ -22,6 +24,7 @@ export type LiveSuggestion = SearchableLiveJob & {
   matchScore: number;
   matchExplanation: string;
   isRelatedMatch: boolean;
+  preferenceAlignment: PreferenceAlignment;
 };
 
 function normalise(value: string) {
@@ -54,6 +57,12 @@ function isRemote(job: SearchableLiveJob) {
   return /\bremote\b/i.test(job.locationLabel);
 }
 
+function preferenceAlignment(job: SearchableLiveJob, preferences: LiveSearchPreferences, city: string | undefined, remoteMatch: boolean): PreferenceAlignment {
+  const workStyle = preferences.workPreferences.length === 0 ? 'not_set' : remoteMatch || (!isRemote(job) && preferences.workPreferences.some((preference) => preference === 'Hybrid' || preference === 'On-site')) ? 'aligned' : 'mismatch'
+  const location = preferences.cities.length === 0 || isRemote(job) ? 'not_set' : city ? 'aligned' : 'mismatch'
+  return { location, workStyle, salary: 'unknown' }
+}
+
 export function getLiveSuggestions(preferences: LiveSearchPreferences, jobs: readonly SearchableLiveJob[]) {
   const preferenceSkills = list(preferences.skills);
   const avoidedCompanies = list(preferences.companiesToAvoid);
@@ -72,12 +81,10 @@ export function getLiveSuggestions(preferences: LiveSearchPreferences, jobs: rea
       const remoteMatch = isRemote(job) && preferences.workPreferences.includes("Remote");
       const isRelatedMatch = !role;
       const score = Math.min(100, (role ? 56 : 14) + Math.min(skills.length, 3) * 10 + (city || remoteMatch ? 2 : 0) + (remoteMatch ? 6 : 4));
-      const reasons = [role ? `Matches ${role}` : "Related to your selected roles"];
-      if (city) reasons.push(`Based in ${city}`);
-      else if (remoteMatch) reasons.push("Remote role");
-      if (skills.length > 0) reasons.push(`Skills: ${skills.slice(0, 2).join(", ")}`);
+      // This is only a temporary pre-resume explanation. It must not frame search preferences as professional evidence.
+      const reasons = ['Professional resume evidence is being prepared.'];
 
-      return { ...job, matchScore: score, matchExplanation: reasons.slice(0, 2).join(" · "), isRelatedMatch };
+      return { ...job, matchScore: score, matchExplanation: reasons[0], isRelatedMatch, preferenceAlignment: preferenceAlignment(job, preferences, city, remoteMatch) };
     })
     .sort((first, second) => {
       if (first.isRelatedMatch !== second.isRelatedMatch) return Number(first.isRelatedMatch) - Number(second.isRelatedMatch);
