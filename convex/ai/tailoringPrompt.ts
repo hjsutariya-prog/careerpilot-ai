@@ -13,6 +13,30 @@ export type TailoringPromptInput = {
   masterEvidence?: TailoringMasterEvidence
 }
 
+export type TailoringPromptBlock = ResumeBlock & {
+  maxCharacters?: number
+  maxWords?: number
+}
+
+function wordCount(text: string) {
+  return text.match(/[A-Za-z0-9]+(?:[+#.-][A-Za-z0-9]+)*/g)?.length ?? 0
+}
+
+/** Mirrors the existing validator limits so Gemini can produce usable edits. */
+export function replacementLimitsForPrompt(text: string) {
+  return {
+    maxCharacters: Math.ceil(text.length * 1.1),
+    maxWords: Math.ceil(wordCount(text) * 1.1),
+  }
+}
+
+export function tailoringBlocksForPrompt(blocks: ResumeBlock[] | undefined): TailoringPromptBlock[] | undefined {
+  return blocks?.map((block) => {
+    if (!block.editable || block.kind === 'skills') return block
+    return { ...block, ...replacementLimitsForPrompt(block.text) }
+  })
+}
+
 export const tailoringSystemInstruction = `You are a controlled Resume Tailoring Assistant.
 
 Your objective is to improve an existing resume's alignment with a supplied job description through minimal, truthful edits.
@@ -115,6 +139,7 @@ Do not propose any edit adding TypeScript.
 
 - Use JD terminology only when it is semantically equivalent to experience already supported by the resume. For example, do not infer Kubernetes experience from AWS deployment experience.
 - Prefer the smallest factual change that materially improves recruiter or ATS understanding of fit. Similar-length rewrites are acceptable. Do not shorten merely for the sake of shortening. If a block is already aligned, return no edit for that block.
+- For every normal text replacement, the replacement must stay within both limits supplied for its block: maxCharacters and maxWords. These are 110% of the original block. Similar length is acceptable, but do not materially expand a bullet. Prefer concise JD-aligned phrasing over extra explanation while preserving all material facts.
 - Returning fewer than 8 edits is preferred when only a few meaningful improvements exist. Do not create edits simply to fill the edit limit.
 
 Before returning an edit, check internally: is this one of the highest-value supported opportunities in the resume for this JD; would this materially improve recruiter or ATS understanding of fit; does it materially improve the match with the JD; is it fully supported by the resume; does it preserve factual meaning; and is this block more important than another possible edit? An edit should add meaningful alignment, not merely wording similarity. If any answer is no, skip the edit.
@@ -170,6 +195,7 @@ For an explicitly cited matched Master experience only, a merge may use facts fr
 
 export function buildTailoringUserPrompt(input: TailoringPromptInput) {
   if (input.editableSlots) {
+    const promptBlocks = tailoringBlocksForPrompt(input.editableSlots)
     const matchedMasterExperiences = Object.values(input.masterEvidence?.byTemplateExperience ?? {}).map((experience) => ({
       templateExperienceId: experience.templateExperienceId,
       masterExperienceId: experience.masterExperienceId,
@@ -185,7 +211,8 @@ export function buildTailoringUserPrompt(input: TailoringPromptInput) {
       : '{"analysis":{"matched":[{"requirement":"...","evidenceBlockIds":["paragraph_4"]}],"understated":[{"requirement":"...","evidenceBlockIds":["paragraph_7"]}],"missing":[{"requirement":"..."}]},"edits":[{"blockId":"paragraph_12","text":"Improved text"}],"reorders":[{"experienceId":"experience_0","blockIds":["paragraph_15","paragraph_13","paragraph_14"]}],"merges":[{"experienceId":"experience_0","sourceBlockIds":["paragraph_12","paragraph_13"],"targetBlockId":"paragraph_12","text":"Merged text"}]}'
     const responseInstructions = hasMasterEvidence ? ' Omit masterBlockIds and sourceMasterBlockIds when no Master fact is used.' : ''
     const labels = hasMasterEvidence ? ['TEMPLATE RESUME BLOCKS', 'SOURCE TEMPLATE RESUME'] : ['RESUME BLOCKS', 'SOURCE RESUME']
-    return `${tailoringSystemInstruction}${hasMasterEvidence ? `\n\n${masterEvidenceInstruction}` : ''}\n\nUse different rules by line type. For a Skills, Technologies, or Tools line: only reorder the existing items; never rewrite, add, or remove an item. The reordered Skills line may be the same length as its original. For an experience bullet or accomplishment: keep the rewrite concise; similar length is acceptable. Preserve all material responsibilities, scope, stakeholders, domain terms, numbers, and factual claims. Do not shorten merely for the sake of shortening. Do not combine or split bullets except through a valid merge, or change action-verb tense.\n\nThe original Word document has locked formatting and must stay within its original two-page limit. Return only JSON in this exact shape: ${responseShape}.${responseInstructions} Return at most 8 edits. Each edit must use only a blockId supplied in RESUME BLOCKS. Never invent a blockId, use an array position or numeric index as an identifier, or return an edit for a non-editable block. For each reorder, use only experience_bullet blockIds from one supplied experienceId and include every bullet in that experience exactly once; otherwise return no reorder. For each merge, use exactly two experience_bullet sourceBlockIds from one supplied experienceId, keep the targetBlockId as one sourceBlockId, and preserve every supported fact from both sources. Skill-line edits may be the same length; experience edits must preserve material factual content. Do not add headings, bullets, contact information, new lines, commentary, or unchanged slots.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\n${labels[0]}:\n${JSON.stringify(input.editableSlots)}${masterSection}\n\n${labels[1]}:\n${input.resumeText.slice(0, 18000)}`
+    const serializedBlocks = JSON.stringify(promptBlocks)
+    return `${tailoringSystemInstruction}${hasMasterEvidence ? `\n\n${masterEvidenceInstruction}` : ''}\n\nUse different rules by line type. For a Skills, Technologies, or Tools line: only reorder the existing items; never rewrite, add, or remove an item. The reordered Skills line may be the same length as its original. For an experience bullet or accomplishment: keep the rewrite concise; similar length is acceptable. Preserve all material responsibilities, scope, stakeholders, domain terms, numbers, and factual claims. Do not shorten merely for the sake of shortening. Do not combine or split bullets except through a valid merge, or change action-verb tense.\n\nThe original Word document has locked formatting and must stay within its original two-page limit. Return only JSON in this exact shape: ${responseShape}.${responseInstructions} Return at most 8 edits. Each edit must use only a blockId supplied in RESUME BLOCKS. Never invent a blockId, use an array position or numeric index as an identifier, or return an edit for a non-editable block. For each reorder, use only experience_bullet blockIds from one supplied experienceId and include every bullet in that experience exactly once; otherwise return no reorder. For each merge, use exactly two experience_bullet sourceBlockIds from one supplied experienceId, keep the targetBlockId as one sourceBlockId, and preserve every supported fact from both sources. Skill-line edits may be the same length; experience edits must preserve material factual content. Do not add headings, bullets, contact information, new lines, commentary, or unchanged slots.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\n${labels[0]}:\n${serializedBlocks}${masterSection}\n\n${labels[1]}:\n${input.resumeText.slice(0, 18000)}`
   }
   return `${tailoringSystemInstruction}\n\nReturn only a polished plain-text resume with clear headings and bullets; no commentary or markdown fences.\n\nJOB TITLE: ${input.jobTitle}\nCOMPANY: ${input.companyName}\nJOB DESCRIPTION:\n${input.jobDescription.slice(0, 9000)}\n\nSOURCE RESUME:\n${input.resumeText.slice(0, 18000)}`
 }

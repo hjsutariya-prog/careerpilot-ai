@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTailoringUserPrompt, tailoringSystemInstruction } from './tailoringPrompt'
+import { buildTailoringUserPrompt, replacementLimitsForPrompt, tailoringBlocksForPrompt, tailoringSystemInstruction } from './tailoringPrompt'
 import { createResumeBlocks } from './resumeBlocks'
 
 describe('tailoring prompt', () => {
@@ -69,9 +69,26 @@ describe('tailoring prompt', () => {
     expect(prompt).toContain('include every bullet in that experience exactly once')
     expect(prompt).toContain('use exactly two experience_bullet sourceBlockIds')
     expect(prompt).toContain('similar length is acceptable')
+    expect(prompt).toContain('must stay within both limits supplied for its block: maxCharacters and maxWords')
+    expect(prompt).toContain('These are 110% of the original block.')
+    expect(prompt).toContain('"maxCharacters":31')
+    expect(prompt).toContain('"maxWords":4')
     expect(prompt).toContain('Preserve all material responsibilities, scope, stakeholders, domain terms, numbers, and factual claims.')
     expect(prompt).not.toContain('every other edit must be strictly shorter')
     expect(prompt).not.toContain('MATCHED MASTER EXPERIENCE EVIDENCE:')
+  })
+
+  it('provides validator-compatible limits only for normal editable text blocks', () => {
+    expect(replacementLimitsForPrompt('Built React dashboards.')).toEqual({ maxCharacters: 26, maxWords: 4 })
+    expect(tailoringBlocksForPrompt(createResumeBlocks([
+      { text: 'Built React dashboards.', editable: true },
+      { text: 'Skills: React, TypeScript', editable: true, kind: 'skills' },
+      { text: 'EXPERIENCE', editable: false, kind: 'heading' },
+    ]))).toMatchObject([
+      { blockId: 'paragraph_0', maxCharacters: 26, maxWords: 4 },
+      { blockId: 'paragraph_1' },
+      { blockId: 'paragraph_2' },
+    ])
   })
 
   it('includes only the Master blocks matched to their corresponding Template experience', () => {

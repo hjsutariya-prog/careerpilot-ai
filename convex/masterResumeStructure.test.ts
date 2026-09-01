@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseMasterResumeStructure, structureForActiveMaster } from './masterResumeStructure'
+import { masterStructureUpsertArgs, parseMasterResumeStructure, structureForActiveMaster } from './masterResumeStructure'
 
 describe('Master Resume experience structure', () => {
   const source = `PROFILE
@@ -60,6 +60,24 @@ AWS experience only`
     expect(structure.ungroupedBlocks.map((block) => block.text)).toEqual(['EXPERIENCE', 'Platform work from 2022 to Present', '• Built APIs'])
   })
 
+  it('parses separate role/date lines and unmarked DOCX paragraphs within a confirmed experience', () => {
+    const structure = parseMasterResumeStructure({
+      resumeId: 'master-resume' as never,
+      text: 'PROFESSIONAL EXPERIENCE\nSenior Business Analyst | Company A\nApr 2022 - Present\nLed backlog prioritization and sprint planning.\nManaged releases across two platforms.',
+    })
+
+    expect(structure.experiences).toEqual([expect.objectContaining({
+      experienceId: 'master_experience_0',
+      title: 'Senior Business Analyst',
+      company: 'Company A',
+      dateText: 'Apr 2022 - Present',
+      blocks: [
+        { blockId: 'master_experience_0_block_0', text: 'Led backlog prioritization and sprint planning.', kind: 'experience_bullet' },
+        { blockId: 'master_experience_0_block_1', text: 'Managed releases across two platforms.', kind: 'experience_bullet' },
+      ],
+    })])
+  })
+
   it('treats no active Master Resume as valid and selects only the current owner’s active structure', () => {
     const structures = [
       { ownerId: 'owner-a', sourceResumeId: 'master-old' },
@@ -69,5 +87,15 @@ AWS experience only`
     expect(structureForActiveMaster(structures, 'owner-a', null)).toBeNull()
     expect(structureForActiveMaster(structures, 'owner-a', 'master-new')).toEqual(structures[1])
     expect(structureForActiveMaster(structures, 'owner-b', 'master-old')).toBeNull()
+  })
+
+  it('creates mutation arguments compatible with the persisted structure schema', () => {
+    const resumeId = 'master-resume' as never
+    const structure = parseMasterResumeStructure({ resumeId, text: source })
+    const args = masterStructureUpsertArgs({ ownerId: 'owner-a', resumeId, sourceHash: 'hash', text: source }, structure)
+
+    expect(args).toEqual({ ownerId: 'owner-a', resumeId, sourceHash: 'hash', structure })
+    expect(args).not.toHaveProperty('text')
+    expect(args.structure.experiences[0]?.blocks[0]).toEqual({ blockId: 'master_experience_0_block_0', text: '• Prioritized product backlog', kind: 'experience_bullet' })
   })
 })

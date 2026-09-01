@@ -81,6 +81,22 @@ describe('tailoring semantic validation', () => {
     expect(overWords.rejectedEdits[0]?.reason).toBe('replacement_too_long')
   })
 
+  it('rejects an over-limit Gemini-style expansion while accepting a concise equivalent', () => {
+    const source = 'Built SQL extracts and Excel models to identify repeat contacts and high-effort journeys, supporting practical process redesign recommendations.'
+    const editable = createResumeBlocks([{ text: source, editable: true }])
+    const expanded = validateTailoringResponse({
+      response: response([{ blockId: 'paragraph_0', text: 'Built SQL-based queries and Excel models to identify the business case for process redesigns by analyzing repeat contacts and high-effort journeys.' }]),
+      editableSlots: editable,
+    })
+    const concise = validateTailoringResponse({
+      response: response([{ blockId: 'paragraph_0', text: 'Built SQL queries and Excel models to identify repeat contacts and high-effort journeys, supporting process redesign recommendations.' }]),
+      editableSlots: editable,
+    })
+
+    expect(expanded.rejectedEdits[0]?.reason).toBe('replacement_too_long')
+    expect(concise.acceptedEdits).toEqual([{ blockId: 'paragraph_0', text: 'Built SQL queries and Excel models to identify repeat contacts and high-effort journeys, supporting process redesign recommendations.' }])
+  })
+
   it('accepts controlled responsibility equivalence and rejects removed material concepts', () => {
     expect(isSafeExperienceRewrite('Owned backlog prioritization across two platforms.', 'Prioritized backlog across two platforms.')).toBe(true)
     const sprint = validateTailoringResponse({ response: response([{ blockId: 'paragraph_0', text: 'Owned backlog prioritization and release management across two platforms.' }]), editableSlots: createResumeBlocks([{ text: 'Owned backlog prioritization, sprint planning, and release management across two platforms.', editable: true }]) })

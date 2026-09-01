@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, tailoringValidationDiagnostic, templateMerges, templateReplacementDiagnostics, templateReorders, templateReplacements, templateSlotsForGemini } from './tailoredResumes'
+import { estimateTailoringMatchPreview, isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, reorderResumeForJob, reorderTemplateSlots, tailoredFileName, tailoringResponseFailureCode, tailoringValidationDiagnostic, templateMerges, templateReplacementDiagnostics, templateReorders, templateReplacements, templateSlotsForGemini } from './tailoredResumes'
 import { createResumeBlocks } from './ai/resumeBlocks'
 
 const blocks = createResumeBlocks
@@ -13,6 +13,28 @@ describe('tailored resume fallback', () => {
 
   it('creates a safe DOCX file name', () => {
     expect(tailoredFileName('Priya Shah.pdf', 'React Engineer', 'Northstar')).toBe('priya-shah-react-engineer-northstar-tailored.docx')
+  })
+
+  it('estimates an improvement only for supported requirements surfaced by accepted edits', () => {
+    expect(estimateTailoringMatchPreview({
+      baselineScore: 72,
+      analysis: {
+        matched: [],
+        understated: [
+          { requirement: 'Product discovery', evidenceBlockIds: ['paragraph_1'] },
+          { requirement: 'SQL analysis', evidenceBlockIds: ['paragraph_2'] },
+        ],
+        missing: [{ requirement: 'Kubernetes' }],
+      },
+      acceptedEditBlockIds: ['paragraph_1'],
+      acceptedReorders: 1,
+    })).toEqual({
+      baselineScore: 72,
+      projectedScore: 76,
+      improvement: 4,
+      surfacedRequirements: ['Product discovery'],
+      stillMissingRequirements: ['Kubernetes'],
+    })
   })
 
   it('provides experience grouping metadata to Gemini for safe reorder plans', () => {
@@ -107,6 +129,11 @@ describe('tailored resume fallback', () => {
     expect(result.shape).toBe('invalid-json')
     expect('textLength' in result && result.textLength).toBe(9)
     expect('parserError' in result && result.parserError).toMatch(/JSON|Unexpected|end/i)
+  })
+
+  it('distinguishes malformed model JSON from valid JSON with the wrong response schema', () => {
+    expect(tailoringResponseFailureCode('{"analysis":')).toBe('GEMINI_INVALID_JSON')
+    expect(tailoringResponseFailureCode('{"unexpected":true}')).toBe('GEMINI_SCHEMA_INVALID')
   })
 
   it('reports redacted validation diagnostics when all proposed edits are rejected', () => {

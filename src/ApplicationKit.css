@@ -12,6 +12,14 @@
 .application-kit .tailor-resume span{color:var(--workspace-lime);font-size:17px;line-height:1}
 .application-kit-message{padding-top:2px}
 .application-kit-message.error{color:#a64229}
+.application-kit-preview{display:grid;gap:7px;padding:11px 12px;background:#fffef9;border:1px solid rgba(7,62,70,.16)}
+.application-kit-preview p{margin:0;color:#42666a;font-size:11px;line-height:1.45}
+.application-kit-preview p b{color:var(--workspace-deep)}
+.application-kit-score{display:flex;align-items:baseline;gap:8px!important}
+.application-kit-score strong{color:var(--workspace-teal);font:800 28px/.9 'Instrument Sans',sans-serif;letter-spacing:-.06em}
+.application-kit-score span{color:var(--workspace-deep);font:700 10px 'DM Mono',monospace}
+.application-kit-discard{width:100%;padding:9px;border:1px solid rgba(7,62,70,.28);background:transparent;color:var(--workspace-teal);cursor:pointer;font:700 11px 'Manrope',sans-serif}
+.application-kit-discard:disabled{cursor:wait;opacity:.68}
 
 .application-kit-changes{display:grid;gap:8px;padding-top:4px;border-top:1px solid rgba(7,62,70,.13)}
 .application-kit-changes ol{display:grid;gap:8px;padding:0;margin:0;list-style:none}

@@ -8,11 +8,26 @@ import { createRoleBrief } from './roleBrief'
 import { FormattedJobDescription } from './FormattedJobDescription'
 import { getUndecidedJobs } from './trackerJobs'
 import { downloadResumeBlob } from './tailoredResumeDownload'
+import { tailoringOutcomeMessage } from './tailoringMessages'
 import './ApplicationKit.css'
-import { createResumeBlocksFromDocxSlots, describeTemplateChanges, extractDocxSlots, patchDocxTemplate } from './docxTemplate'
+import { createResumeBlocksFromDocxSlots, describeTemplateChanges, extractDocxSlots, patchDocxTemplate, type DocxSlot } from './docxTemplate'
+import type { TailoringMatchPreview } from '../convex/tailoredResumes'
+import type { TailoringMerge, TailoringReorder } from '../convex/ai/tailoringSchema'
 
 type JobActionStatus = 'Apply' | 'Reject' | 'On Hold'
 type JobCard = NonNullable<ReturnType<typeof toLiveJobCard>>
+type TailoringPreviewState = {
+  source: ArrayBuffer
+  slots: DocxSlot[]
+  result: {
+    fileName: string
+    replacements: string[]
+    reorders?: TailoringReorder[]
+    merges?: TailoringMerge[]
+    reservationId?: string
+    preview: TailoringMatchPreview
+  }
+}
 
 type ResultsScreenProps = {
   embedded?: boolean
@@ -59,6 +74,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
   const requestAiSummary = useMutation(api.roleSummaries.request)
   const generateTailoredResume = useAction(api.tailoredResumes.generate)
   const completeTailoredResume = useMutation(api.tailoredResumes.complete)
+  const cancelTailoredResume = useMutation(api.tailoredResumes.cancel)
   const createPdfUpload = useMutation(api.resumeDocuments.createUpload)
   const convertToPdf = useAction(api.resumeDocuments.convertToPdf)
   const credits = useQuery(api.credits.balanceMine)
@@ -66,6 +82,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
   const [tailoringJobId, setTailoringJobId] = useState<string | null>(null)
   const [tailorMessage, setTailorMessage] = useState<{ tone: 'error' | 'status'; text: string } | null>(null)
   const [tailorChanges, setTailorChanges] = useState<{ before: string; after: string }[]>([])
+  const [tailoringPreview, setTailoringPreview] = useState<TailoringPreviewState | null>(null)
   const [resumeFormat, setResumeFormat] = useState<'docx' | 'pdf'>('docx')
 
   useEffect(() => {
@@ -82,7 +99,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
         ? aiSummary.failureMessage ?? 'Showing the listing-based summary instead.'
         : summaryRequestError || 'Listing-based summary'
 
-  const tailorResume = async () => {
+  const previewTailoring = async () => {
     if (credits && credits.available < credits.tailoringCost) {
       setTailorMessage({ tone: 'error', text: `You need ${credits.tailoringCost} CareerPilot credits to tailor a resume.` })
       return
@@ -93,6 +110,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
     }
     setTailorMessage(null)
     setTailorChanges([])
+    setTailoringPreview(null)
     setTailoringJobId(job.id)
     try {
       const sourceResponse = await fetch(savedResume.downloadUrl)
@@ -101,13 +119,44 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
       const slots = await extractDocxSlots(source)
       const templateSlots = createResumeBlocksFromDocxSlots(slots)
       const result = await generateTailoredResume({ jobId: job.id as Id<'jobs'>, templateSlots })
-      if (result.mode === 'layout_protected' || !result.replacements) {
-        setTailorMessage({ tone: 'error', text: 'We could not make safe changes to this resume. No credits were used.' })
+      if (result.mode === 'provider_unavailable' || result.mode === 'ai_response_invalid') {
+        setTailorMessage(tailoringOutcomeMessage(result.mode, result.failureCode))
         return
       }
+      if (result.mode === 'no_meaningful_changes') {
+        setTailorMessage(tailoringOutcomeMessage(result.mode))
+        return
+      }
+      if (result.mode === 'no_safe_changes') {
+        setTailorMessage(tailoringOutcomeMessage(result.mode))
+        return
+      }
+      if (result.mode === 'layout_protected' || !result.replacements || !result.preview) {
+        setTailorMessage(tailoringOutcomeMessage('layout_protected'))
+        return
+      }
+      setTailoringPreview({ source, slots, result: { fileName: result.fileName, replacements: result.replacements, reorders: result.reorders, merges: result.merges, reservationId: result.reservationId, preview: result.preview } })
+      setTailorChanges(describeTemplateChanges(slots, result.replacements))
+      setTailorMessage({ tone: 'status', text: 'Review the evidence-backed changes and estimated match movement before generating your file.' })
+    } catch (error) {
+      const message = error instanceof Error && error.message.includes('Please re-upload your resume before tailoring it.')
+        ? 'This earlier resume needs to be uploaded once more before we can tailor it. Your original file stays in your account.'
+        : 'We could not prepare a tailoring preview right now. Please try again.'
+      setTailorMessage({ tone: 'error', text: message })
+    } finally {
+      setTailoringJobId(null)
+    }
+  }
+
+  const generateTailoredFile = async () => {
+    if (!tailoringPreview) return
+    setTailorMessage(null)
+    setTailoringJobId(job.id)
+    try {
+      const { source, slots, result } = tailoringPreview
       const tailoredDocx = await patchDocxTemplate(source, slots, result.replacements, result.reorders, result.merges)
       if (resumeFormat === 'pdf') {
-        if (!result.reservationId) throw new Error('A PDF requires a successful AI tailoring request.')
+        if (!result.reservationId) throw new Error('A PDF needs an AI tailoring preview. Choose DOCX for this safe reorder.')
         setTailorMessage({ tone: 'status', text: 'Converting your tailored DOCX to PDF…' })
         const upload = await createPdfUpload({ jobId: job.id as Id<'jobs'>, reservationId: result.reservationId as Id<'creditLedger'>, fileName: result.fileName })
         const uploadResponse = await fetch(upload.uploadUrl, { method: 'POST', headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }, body: tailoredDocx })
@@ -121,13 +170,24 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
         if (result.reservationId) await completeTailoredResume({ reservationId: result.reservationId as Id<'creditLedger'> })
         downloadResumeBlob(result.fileName, tailoredDocx)
       }
-      setTailorChanges(describeTemplateChanges(slots, result.replacements))
-      setTailorMessage({ tone: 'status', text: result.mode === 'reordered' ? 'AI could not safely rewrite this resume, so matching skills were reordered inside your original Word layout.' : 'Original Word formatting preserved. Replacements were limited to your existing text slots.' })
+      setTailorMessage({ tone: 'status', text: 'Original Word formatting preserved. Replacements were limited to your existing text slots.' })
     } catch (error) {
-      const message = error instanceof Error && error.message.includes('Please re-upload your resume before tailoring it.')
-        ? 'This earlier resume needs to be uploaded once more before we can tailor it. Your original file stays in your account.'
-        : 'We could not tailor your resume right now. Please try again.'
-      setTailorMessage({ tone: 'error', text: message })
+      setTailorMessage({ tone: 'error', text: 'We could not generate your tailored file right now. Please try again.' })
+    } finally {
+      setTailoringJobId(null)
+    }
+  }
+
+  const discardTailoringPreview = async () => {
+    if (!tailoringPreview) return
+    setTailoringJobId(job.id)
+    try {
+      if (tailoringPreview.result.reservationId) await cancelTailoredResume({ reservationId: tailoringPreview.result.reservationId as Id<'creditLedger'> })
+      setTailoringPreview(null)
+      setTailorChanges([])
+      setTailorMessage({ tone: 'status', text: 'Preview discarded. No credits were used.' })
+    } catch {
+      setTailorMessage({ tone: 'error', text: 'We could not discard this preview. It will expire automatically.' })
     } finally {
       setTailoringJobId(null)
     }
@@ -137,7 +197,7 @@ function FocusedRoleView({ embedded, job, isSaving, onBack, onSave }: { embedded
     <section className="role-focus-view" aria-labelledby="focused-role-title">
       <header className="role-focus-header"><button className="role-focus-back" onClick={onBack} type="button"><span aria-hidden="true">←</span> Back to jobs</button><p>{job.freshnessLabel}</p></header>
       <div className="role-focus-hero"><p className="eyebrow">ROLE OVERVIEW</p><div><div aria-hidden="true" className="workspace-company-mark">{job.companyName.slice(0, 1)}</div><p>{job.companyName}</p></div><h1 id="focused-role-title">{job.title}</h1><div className="role-focus-meta"><span>{job.cityLabel}</span><span>{job.workPreference}</span><span><b>{job.matchScore}</b> {matchLabel(job.matchScore, job.isRelatedMatch, job.matchSource)}</span></div></div>
-      <div className="role-focus-layout"><section className="role-focus-main"><div className="role-focus-section"><p className="role-detail-label">Role summary</p>{summary ? <p className="role-focus-summary">{summary}</p> : <p className="role-focus-summary unavailable">This listing does not provide a separate role overview. The full company description is available below.</p>}<p className="role-summary-source" role={aiSummary?.status === 'queued' || aiSummary?.status === 'generating' ? 'status' : undefined}>{summaryNote}</p></div>{responsibilities.length > 0 && <div className="role-focus-section"><p className="role-detail-label">What you will work on</p><ol className="role-focus-responsibilities">{responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ol></div>}{aiSummary?.status === 'ready' && aiSummary.suitableFor && <div className="role-focus-section role-focus-suitable"><p className="role-detail-label">Best suited to</p><p>{aiSummary.suitableFor}</p></div>}<details className="role-focus-original"><summary>Open the original job description <span aria-hidden="true">↓</span></summary><FormattedJobDescription fallback={job.description} html={job.descriptionHtml} /></details></section><aside className="role-focus-side"><section><p className="role-detail-label">Why it fits</p><p>{job.matchReason}</p></section>{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).length > 0 && <section><p className="role-detail-label">Skills in this role</p><div className="role-skill-list">{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).slice(0, 8).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<section className="application-kit" aria-labelledby="application-kit-title"><div className="application-kit-heading"><p className="role-detail-label">Application kit</p><span aria-hidden="true">↳</span></div><h2 id="application-kit-title">Tailor your original Word resume</h2><p>Uses your DOCX as a locked template. It keeps your layout and sections, with shorter replacements to protect a two-page resume.</p><label className="application-kit-format">{credits ? `${credits.tailoringCost} credits` : 'Checking credits…'}<select aria-label="Resume download format" onChange={(event) => setResumeFormat(event.target.value as 'docx' | 'pdf')} value={resumeFormat}><option value="docx">DOCX</option><option value="pdf">PDF</option></select></label><button className="tailor-resume application-kit-action" disabled={tailoringJobId === job.id || savedResume === undefined || credits === undefined || (credits !== null && credits.available < credits.tailoringCost)} onClick={() => void tailorResume()} type="button">{tailoringJobId === job.id ? (resumeFormat === 'pdf' ? 'Preparing PDF…' : 'Preparing resume…') : `Tailor as ${resumeFormat.toUpperCase()}`} <span aria-hidden="true">↓</span></button>{tailorMessage && <p className={tailorMessage.tone === 'error' ? 'application-kit-message error' : 'application-kit-message'} role={tailorMessage.tone === 'error' ? 'alert' : 'status'}>{tailorMessage.text}</p>}{tailorChanges.length > 0 && <section className="application-kit-changes" aria-labelledby="tailoring-summary-title"><p className="role-detail-label" id="tailoring-summary-title">What changed</p><ol>{tailorChanges.map((change) => <li key={change.before + change.after}><s>{change.before}</s><strong>{change.after}</strong></li>)}</ol></section>}</section><a aria-disabled={isSaving} className="workspace-apply role-focus-apply" href={job.applyUrl} onClick={() => void onSave(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply on {job.companyName} <span aria-hidden="true">↗</span></a><div className="role-focus-actions"><button disabled={isSaving} onClick={() => void onSave(job.id, 'On Hold')} type="button">Hold this role</button><button className="reject" disabled={isSaving} onClick={() => void onSave(job.id, 'Reject')} type="button">Reject</button></div></aside></div>
+      <div className="role-focus-layout"><section className="role-focus-main"><div className="role-focus-section"><p className="role-detail-label">Role summary</p>{summary ? <p className="role-focus-summary">{summary}</p> : <p className="role-focus-summary unavailable">This listing does not provide a separate role overview. The full company description is available below.</p>}<p className="role-summary-source" role={aiSummary?.status === 'queued' || aiSummary?.status === 'generating' ? 'status' : undefined}>{summaryNote}</p></div>{responsibilities.length > 0 && <div className="role-focus-section"><p className="role-detail-label">What you will work on</p><ol className="role-focus-responsibilities">{responsibilities.map((responsibility) => <li key={responsibility}>{responsibility}</li>)}</ol></div>}{aiSummary?.status === 'ready' && aiSummary.suitableFor && <div className="role-focus-section role-focus-suitable"><p className="role-detail-label">Best suited to</p><p>{aiSummary.suitableFor}</p></div>}<details className="role-focus-original"><summary>Open the original job description <span aria-hidden="true">↓</span></summary><FormattedJobDescription fallback={job.description} html={job.descriptionHtml} /></details></section><aside className="role-focus-side"><section><p className="role-detail-label">Why it fits</p><p>{job.matchReason}</p></section>{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).length > 0 && <section><p className="role-detail-label">Skills in this role</p><div className="role-skill-list">{(aiSummary?.status === 'ready' ? aiSummary.skills ?? [] : job.skills).slice(0, 8).map((skill) => <span key={skill}>{skill}</span>)}</div></section>}<section className="application-kit" aria-labelledby="application-kit-title"><div className="application-kit-heading"><p className="role-detail-label">Application kit</p><span aria-hidden="true">↳</span></div><h2 id="application-kit-title">Tailor your original Word resume</h2><p>Review safe changes and an estimated match movement before generating your file.</p><label className="application-kit-format">{credits ? `${credits.tailoringCost} credits` : 'Checking credits…'}<select aria-label="Resume download format" disabled={tailoringJobId === job.id} onChange={(event) => setResumeFormat(event.target.value as 'docx' | 'pdf')} value={resumeFormat}><option value="docx">DOCX</option><option value="pdf">PDF</option></select></label>{tailoringPreview ? <><section className="application-kit-preview" aria-labelledby="tailoring-preview-title"><p className="role-detail-label" id="tailoring-preview-title">Match estimate</p><p className="application-kit-score"><strong>{tailoringPreview.result.preview.projectedScore}%</strong><span>from {tailoringPreview.result.preview.baselineScore}% · +{tailoringPreview.result.preview.improvement} points</span></p><p>Based only on validated evidence surfaced in the suggested edits. It does not count missing requirements and is not a hiring guarantee.</p>{tailoringPreview.result.preview.surfacedRequirements.length > 0 && <p><b>Will surface:</b> {tailoringPreview.result.preview.surfacedRequirements.join(' · ')}</p>}{tailoringPreview.result.preview.stillMissingRequirements.length > 0 && <p><b>Still missing:</b> {tailoringPreview.result.preview.stillMissingRequirements.join(' · ')}</p>}</section>{tailorChanges.length > 0 && <section className="application-kit-changes" aria-labelledby="tailoring-summary-title"><p className="role-detail-label" id="tailoring-summary-title">Suggested modifications</p><ol>{tailorChanges.map((change) => <li key={change.before + change.after}><s>{change.before}</s><strong>{change.after}</strong></li>)}</ol></section>}<button className="tailor-resume application-kit-action" disabled={tailoringJobId === job.id} onClick={() => void generateTailoredFile()} type="button">{tailoringJobId === job.id ? (resumeFormat === 'pdf' ? 'Preparing PDF…' : 'Preparing DOCX…') : `Generate ${resumeFormat.toUpperCase()}`} <span aria-hidden="true">↓</span></button><button className="application-kit-discard" disabled={tailoringJobId === job.id} onClick={() => void discardTailoringPreview()} type="button">Discard preview</button></> : <button className="tailor-resume application-kit-action" disabled={tailoringJobId === job.id || savedResume === undefined || credits === undefined || (credits !== null && credits.available < credits.tailoringCost)} onClick={() => void previewTailoring()} type="button">{tailoringJobId === job.id ? 'Preparing preview…' : 'Preview suggested changes'} <span aria-hidden="true">→</span></button>}{tailorMessage && <p className={tailorMessage.tone === 'error' ? 'application-kit-message error' : 'application-kit-message'} role={tailorMessage.tone === 'error' ? 'alert' : 'status'}>{tailorMessage.text}</p>}</section><a aria-disabled={isSaving} className="workspace-apply role-focus-apply" href={job.applyUrl} onClick={() => void onSave(job.id, 'Apply')} rel="noreferrer" target="_blank">Apply on {job.companyName} <span aria-hidden="true">↗</span></a><div className="role-focus-actions"><button disabled={isSaving} onClick={() => void onSave(job.id, 'On Hold')} type="button">Hold this role</button><button className="reject" disabled={isSaving} onClick={() => void onSave(job.id, 'Reject')} type="button">Reject</button></div></aside></div>
     </section>
   </WorkspaceFrame>
 }

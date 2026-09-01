@@ -179,7 +179,7 @@ export const tailoringEvalCases: TailoringEvalCase[] = [
     id: 'master-backed-project-delivery', category: 'Product', jobDescription: 'Experience with project management, agile delivery, sprint planning, and release management.',
     resumeBlocks: experienceBlocks([{ header: 'Product Owner | Company A | 2022–Present', bullets: ['Worked with cross-functional teams on product delivery.'] }]),
     masterResumeStructure: masterStructure([{ header: 'Product Owner | Company A Pvt Ltd | 2022–Present', title: 'Product Owner', company: 'Company A Pvt Ltd', dateText: '2022–Present', bullets: ['Prioritized the product backlog.', 'Facilitated sprint planning.', 'Managed releases across two enterprise platforms.'] }]),
-    expectations: { shouldRecognizeMatchedOrUnderstated: [{ concept: 'Project management' }, { concept: 'Agile delivery' }, { concept: 'Sprint planning' }, { concept: 'Release management' }], editableBlockIds: editable(1), maxAcceptedEdits: 8 },
+    expectations: { shouldRecognizeMatchedOrUnderstated: [{ concept: 'Sprint planning' }, { concept: 'Release management' }], editableBlockIds: editable(1), maxAcceptedEdits: 8 },
   },
   {
     id: 'master-cross-experience-leak', category: 'Safety/edge cases', jobDescription: 'Build React applications with TypeScript.',

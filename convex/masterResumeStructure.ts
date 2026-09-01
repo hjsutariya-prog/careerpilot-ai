@@ -31,7 +31,16 @@ export type MasterResumeStructure = {
   ungroupedBlocks: MasterExperienceBlock[]
 }
 
-const dateRangePattern = /\b(?:19|20)\d{2}\s*(?:[-–—]|to)\s*(?:(?:19|20)\d{2}|present|current)\b/i
+type MasterStructureInput = { ownerId: string; resumeId: Id<'resumes'>; sourceHash: string; text: string }
+type MasterStructureUpsertInput = Omit<MasterStructureInput, 'text'> & { structure: MasterResumeStructure }
+
+/** Keeps raw extracted text out of the strict mutation argument validator. */
+export function masterStructureUpsertArgs(input: MasterStructureInput, structure: MasterResumeStructure): MasterStructureUpsertInput {
+  return { ownerId: input.ownerId, resumeId: input.resumeId, sourceHash: input.sourceHash, structure }
+}
+
+const monthNamePattern = '(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)'
+const dateRangePattern = new RegExp(`\\b(?:${monthNamePattern}\\s+)?(?:19|20)\\d{2}\\s*(?:[-–—]|to)\\s*(?:(?:${monthNamePattern}\\s+)?(?:19|20)\\d{2}|present|current)\\b`, 'i')
 const bulletPattern = /^\s*(?:[•●▪◦‣⁃*-]|\d+[.)])\s+/
 
 function isSectionHeading(text: string) {
@@ -46,7 +55,13 @@ function isExperienceHeader(text: string) {
   const value = text.trim()
   const hasDateRange = dateRangePattern.test(value)
   const hasRoleCompanySeparator = /[|•·]|\bat\b|\s[-–—]\s/i.test(value)
-  return hasDateRange && hasRoleCompanySeparator
+  const nonDateContent = value.replace(dateRangePattern, '').replace(/[|•·\-–—]/g, '').trim()
+  return hasDateRange && hasRoleCompanySeparator && nonDateContent.length > 3
+}
+
+function isRoleCompanyLine(text: string) {
+  const parts = text.split('|').map((part) => part.trim()).filter(Boolean)
+  return !dateRangePattern.test(text) && parts.length === 2 && parts.every((part) => part.length > 2)
 }
 
 function isBullet(text: string) {
@@ -68,15 +83,29 @@ export function parseMasterResumeStructure(input: { resumeId: Id<'resumes'>; tex
   const ungroupedBlocks: MasterExperienceBlock[] = []
   let inExperienceSection = false
   let currentExperience: MasterExperience | null = null
+  let pendingRoleCompanyHeader: string | null = null
   let ungroupedIndex = 0
 
   const addUngrouped = (text: string, kind: MasterExperienceBlockKind = 'other') => {
     ungroupedBlocks.push({ blockId: `master_ungrouped_block_${ungroupedIndex++}`, text, kind })
   }
 
+  const startExperience = (headerText: string) => {
+    const order = experiences.length
+    const experience: MasterExperience = { experienceId: `master_experience_${order}`, order, headerText, ...headerMetadata(headerText), blocks: [] }
+    experiences.push(experience)
+    return experience
+  }
+
+  const flushPendingHeader = () => {
+    if (pendingRoleCompanyHeader) addUngrouped(pendingRoleCompanyHeader)
+    pendingRoleCompanyHeader = null
+  }
+
   for (const line of masterResumeLines(input.text)) {
     const trimmed = line.trim()
     if (isSectionHeading(trimmed)) {
+      flushPendingHeader()
       inExperienceSection = isExperienceSectionHeading(trimmed)
       currentExperience = null
       addUngrouped(line)
@@ -84,20 +113,35 @@ export function parseMasterResumeStructure(input: { resumeId: Id<'resumes'>; tex
     }
 
     if (inExperienceSection && isExperienceHeader(trimmed)) {
-      const order = experiences.length
-      currentExperience = { experienceId: `master_experience_${order}`, order, headerText: line, ...headerMetadata(trimmed), blocks: [] }
-      experiences.push(currentExperience)
+      flushPendingHeader()
+      currentExperience = startExperience(line)
       continue
     }
 
-    if (inExperienceSection && currentExperience && isBullet(line)) {
+    if (inExperienceSection && pendingRoleCompanyHeader && dateRangePattern.test(trimmed)) {
+      currentExperience = startExperience(`${pendingRoleCompanyHeader} | ${line}`)
+      pendingRoleCompanyHeader = null
+      continue
+    }
+
+    if (inExperienceSection && isRoleCompanyLine(trimmed)) {
+      flushPendingHeader()
+      currentExperience = null
+      pendingRoleCompanyHeader = line
+      continue
+    }
+
+    if (inExperienceSection && currentExperience && (isBullet(line) || trimmed.length > 0)) {
       const blockIndex = currentExperience.blocks.length
       currentExperience.blocks.push({ blockId: `${currentExperience.experienceId}_block_${blockIndex}`, text: line, kind: 'experience_bullet' })
       continue
     }
 
+    flushPendingHeader()
     addUngrouped(line)
   }
+
+  flushPendingHeader()
 
   return { resumeId: input.resumeId, experiences, ungroupedBlocks }
 }
@@ -147,12 +191,12 @@ export const reuseForActiveMaster = internalMutation({
 export const ensureForMaster = internalAction({
   args: { resumeId: v.id('resumes') },
   handler: async (ctx, args): Promise<Id<'masterResumeStructures'> | null> => {
-    const input = await ctx.runQuery(internal.masterResumeStructure.inputForMaster, args) as { ownerId: string; resumeId: Id<'resumes'>; sourceHash: string; text: string } | null
+    const input = await ctx.runQuery(internal.masterResumeStructure.inputForMaster, args) as MasterStructureInput | null
     if (!input) return null
     const reused = await ctx.runMutation(internal.masterResumeStructure.reuseForActiveMaster, { resumeId: input.resumeId, ownerId: input.ownerId, sourceHash: input.sourceHash })
     if (reused) return reused
     const structure = parseMasterResumeStructure({ resumeId: input.resumeId, text: input.text })
-    return await ctx.runMutation(internal.masterResumeStructure.upsertForActiveMaster, { ...input, structure })
+    return await ctx.runMutation(internal.masterResumeStructure.upsertForActiveMaster, masterStructureUpsertArgs(input, structure))
   },
 })
 

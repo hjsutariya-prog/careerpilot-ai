@@ -1,5 +1,5 @@
 export const tailoringGeminiConfig = {
-  model: 'gemini-3.1-pro-preview',
+  model: 'gemini-3.7-flash',
   thinkingLevel: 'high' as const,
   maxOutputTokens: 6000,
   timeoutMs: 300_000,

@@ -2,11 +2,11 @@ import { action, internalQuery, mutation } from './_generated/server'
 import { internal } from './_generated/api'
 import { v } from 'convex/values'
 import { requireOwner } from './owner'
-import { requestGeminiResponse, requestGeminiText } from './gemini'
+import { isGeminiRequestError, requestGeminiResponse, requestGeminiText, type GeminiFailureCode } from './gemini'
 import { tailoringGeminiConfig, tailoringJsonRepairGeminiConfig } from './ai/tailoringGeminiConfig'
 import { buildTailoringUserPrompt } from './ai/tailoringPrompt'
 import { buildTailoringJsonRepairPrompt, requiresTailoringJsonRepair } from './ai/tailoringRepair'
-import { emptyTailoringAnalysis, parseLegacyIndexedTailoringResponse, parseLegacyTailoringReplacements, parseTailoringResponse, tailoringResponseSchema, type ParsedTailoringResponse, type TailoringMerge, type TailoringReorder } from './ai/tailoringSchema'
+import { emptyTailoringAnalysis, parseLegacyIndexedTailoringResponse, parseLegacyTailoringReplacements, parseTailoringResponse, tailoringResponseSchema, type ParsedTailoringResponse, type TailoringAnalysis, type TailoringMerge, type TailoringReorder } from './ai/tailoringSchema'
 import { actionTense, isSafeExperienceRewrite, isSafeSkillReorder, preservesActionTense, validateTailoringResponse, type TailoringValidationResult } from './ai/tailoringValidation'
 import { areResumeBlocksConsistent, type ResumeBlock } from './ai/resumeBlocks'
 import { validateTailoringReorders, type TailoringReorderValidationResult } from './ai/tailoringReorderValidation'
@@ -15,9 +15,17 @@ import { masterEvidenceForTemplateSlots, type TailoringMasterEvidence } from './
 import type { MasterResumeStructure } from './masterResumeStructure'
 import { selectActiveMaster, selectLatestTemplateResume } from './resumeRecords'
 
-type Input = { resumeText: string; resumeFileName: string; title: string; companyName: string; description: string; masterStructure: MasterResumeStructure | null }
+type Input = { resumeText: string; resumeFileName: string; title: string; companyName: string; description: string; masterStructure: MasterResumeStructure | null; matchScore: number }
 type TemplateSlot = ResumeBlock
-type TailoredResult = { fileName: string; resumeText: string; mode: 'ai' | 'reordered' | 'layout_protected'; replacements?: string[]; reorders?: TailoringReorder[]; merges?: TailoringMerge[]; reservationId?: string }
+export type TailoringMatchPreview = {
+  baselineScore: number
+  projectedScore: number
+  improvement: number
+  surfacedRequirements: string[]
+  stillMissingRequirements: string[]
+}
+export type TailoringResultMode = 'ai' | 'reordered' | 'layout_protected' | 'provider_unavailable' | 'ai_response_invalid' | 'no_safe_changes' | 'no_meaningful_changes'
+type TailoredResult = { fileName: string; resumeText: string; mode: TailoringResultMode; failureCode?: GeminiFailureCode; replacements?: string[]; reorders?: TailoringReorder[]; merges?: TailoringMerge[]; reservationId?: string; preview?: TailoringMatchPreview }
 
 export function templateSlotsForGemini(slots: TemplateSlot[] | undefined): TemplateSlot[] | undefined {
   return slots?.map(({ blockId, index, text, editable, kind, experienceId, bulletIndex }) => ({
@@ -67,6 +75,33 @@ export function tailoredFileName(resumeFileName: string, title: string, companyN
   return `${[base, title, companyName, 'tailored'].join('-').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.docx`
 }
 
+/**
+ * Estimates the score movement from requirements that can be surfaced without
+ * adding facts. It intentionally gives no credit for requirements still missing.
+ */
+export function estimateTailoringMatchPreview(input: {
+  baselineScore: number
+  analysis: TailoringAnalysis
+  acceptedEditBlockIds: string[]
+  acceptedReorders: number
+}) : TailoringMatchPreview {
+  const acceptedBlockIds = new Set(input.acceptedEditBlockIds)
+  const surfacedRequirements = [...new Set(input.analysis.understated
+    .filter((item) => item.evidenceBlockIds.some((blockId) => acceptedBlockIds.has(blockId)))
+    .map((item) => item.requirement.trim())
+    .filter(Boolean))]
+  const stillMissingRequirements = [...new Set(input.analysis.missing.map((item) => item.requirement.trim()).filter(Boolean))]
+  const improvement = Math.min(12, surfacedRequirements.length * 3 + Math.min(2, input.acceptedReorders))
+  const baselineScore = Math.min(100, Math.max(0, Math.round(input.baselineScore)))
+  return {
+    baselineScore,
+    projectedScore: Math.min(100, baselineScore + improvement),
+    improvement,
+    surfacedRequirements,
+    stillMissingRequirements,
+  }
+}
+
 function legacyResponse(edits: ParsedTailoringResponse['edits']): ParsedTailoringResponse {
   return { analysis: emptyTailoringAnalysis(), edits, analysisProvided: false }
 }
@@ -88,6 +123,18 @@ function parsedTemplateResponse(text: string, slots: TemplateSlot[]): ParsedTemp
   return {
     response: legacyResponse(values.flatMap((value, index) => typeof value === 'string' ? [{ blockId: slots[index].blockId, text: value }] : [])),
     maxEdits: values.length,
+  }
+}
+
+/** Categorizes successful HTTP model text only; transport errors are handled before this function is reached. */
+export function tailoringResponseFailureCode(text: string): Extract<GeminiFailureCode, 'GEMINI_INVALID_JSON' | 'GEMINI_SCHEMA_INVALID'> {
+  const fenced = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+  const candidate = fenced.match(/\{[\s\S]*\}/)?.[0] ?? fenced
+  try {
+    JSON.parse(candidate)
+    return 'GEMINI_SCHEMA_INVALID'
+  } catch {
+    return 'GEMINI_INVALID_JSON'
   }
 }
 
@@ -255,12 +302,13 @@ export const inputForGeneration = internalQuery({ args: { ownerId: v.string(), j
   const latest = (await ctx.db.query('searchRuns').withIndex('by_owner_requested', (q) => q.eq('ownerId', args.ownerId)).order('desc').collect())[0]
   if (!resume?.extractedText || !latest) return null
   const suggestions = await ctx.db.query('jobSuggestions').withIndex('by_search_rank', (q) => q.eq('searchRunId', latest._id)).collect()
-  if (!suggestions.some((suggestion) => suggestion.jobId === args.jobId)) return null
+  const suggestion = suggestions.find((item) => item.jobId === args.jobId)
+  if (!suggestion) return null
   const job = await ctx.db.get(args.jobId)
   const masterStructure = master
     ? await ctx.db.query('masterResumeStructures').withIndex('by_owner_resume', (q) => q.eq('ownerId', args.ownerId).eq('sourceResumeId', master._id)).first()
     : null
-  return job ? { resumeText: resume.extractedText, resumeFileName: resume.fileName, title: job.title, companyName: job.companyName, description: job.description, masterStructure: masterStructure?.structure ?? null } : null
+  return job ? { resumeText: resume.extractedText, resumeFileName: resume.fileName, title: job.title, companyName: job.companyName, description: job.description, masterStructure: masterStructure?.structure ?? null, matchScore: suggestion.matchScore } : null
 } })
 
 export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.optional(v.array(v.object({
@@ -278,13 +326,7 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
   if (args.templateSlots && !areResumeBlocksConsistent(args.templateSlots)) throw new Error('The resume blocks are invalid. Please refresh and try again.')
   const reservation = await ctx.runMutation(internal.credits.reserve, { ownerId, referenceId: `tailored:${String(args.jobId)}:${Date.now()}` })
   const fallback = (): TailoredResult => ({ fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: reorderResumeForJob(input.resumeText, input.description), mode: 'reordered' })
-  const protectedTemplate = (): TailoredResult => ({ fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: input.resumeText, mode: 'layout_protected' })
-  const templateFallback = (): TailoredResult => {
-    const replacements = args.templateSlots ? reorderTemplateSlots(args.templateSlots, input.description) : []
-    return replacements.some((replacement, index) => replacement !== args.templateSlots?.[index].text)
-      ? { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: replacements.join('\n'), replacements, mode: 'reordered' }
-      : protectedTemplate()
-  }
+  const protectedTemplate = (mode: Exclude<TailoringResultMode, 'ai' | 'reordered'> = 'layout_protected', failureCode?: GeminiFailureCode): TailoredResult => ({ fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: input.resumeText, mode, ...(failureCode ? { failureCode } : {}) })
   const requestStartedAt = Date.now()
   try {
     const masterEvidence = masterEvidenceForTailoring(args.templateSlots, input.masterStructure)
@@ -301,16 +343,27 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
       const validationDiagnostic = tailoringValidationDiagnostic(text, args.templateSlots, masterEvidence)
       console.info('Resume tailoring validation diagnostic.', { durationMs: Date.now() - requestStartedAt, repairedMalformedJson: malformedInitialResponse, ...validationDiagnostic })
       const validated = templateValidation(text, args.templateSlots, masterEvidence)
+      if (!validated) {
+        await ctx.runMutation(internal.credits.release, { reservationId: reservation.reservationId })
+        return protectedTemplate('ai_response_invalid', tailoringResponseFailureCode(text))
+      }
       const merges = validated?.mergeValidation.acceptedMerges ?? []
       const replacements = validated ? replacementsForValidation(validated.validation, args.templateSlots, merges) : null
       const reorders = validated?.reorderValidation.acceptedReorders ?? []
       if (replacements || merges.length > 0 || reorders.length > 0) {
         const finalReplacements = replacements ?? args.templateSlots.map((slot) => slot.text)
-        return { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: finalReplacements.join('\n'), replacements: finalReplacements, merges, reorders, mode: 'ai', reservationId: String(reservation.reservationId) }
+        const preview = estimateTailoringMatchPreview({
+          baselineScore: input.matchScore,
+          analysis: validated!.validation.analysis,
+          acceptedEditBlockIds: validated!.validation.acceptedEdits.map((edit) => edit.blockId),
+          acceptedReorders: reorders.length,
+        })
+        return { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: finalReplacements.join('\n'), replacements: finalReplacements, merges, reorders, mode: 'ai', reservationId: String(reservation.reservationId), preview }
       }
       console.warn('Gemini tailoring response did not contain safe template-slot replacements.', { durationMs: Date.now() - requestStartedAt, repairedMalformedJson: malformedInitialResponse, ...templateReplacementDiagnostics(text, args.templateSlots) })
       await ctx.runMutation(internal.credits.release, { reservationId: reservation.reservationId })
-      return templateFallback()
+      const proposedOperations = validated.response.edits.length + (validated.response.reorders?.length ?? 0) + (validated.response.merges?.length ?? 0)
+      return protectedTemplate(proposedOperations === 0 ? 'no_meaningful_changes' : 'no_safe_changes')
     }
     if (text.length < 80 || text.replace(/\s+/g, ' ') === input.resumeText.replace(/\s+/g, ' ')) {
       await ctx.runMutation(internal.credits.release, { reservationId: reservation.reservationId })
@@ -318,9 +371,10 @@ export const generate = action({ args: { jobId: v.id('jobs'), templateSlots: v.o
     }
     return { fileName: tailoredFileName(input.resumeFileName, input.title, input.companyName), resumeText: text, mode: 'ai' as const, reservationId: String(reservation.reservationId) }
   } catch (error) {
-    console.warn('Gemini tailoring request failed.', { durationMs: Date.now() - requestStartedAt, message: error instanceof Error ? error.message : String(error) })
+    const failureCode = isGeminiRequestError(error) ? error.code : 'GEMINI_SERVER_ERROR'
+    console.warn('Gemini tailoring request failed.', { durationMs: Date.now() - requestStartedAt, failureCode, httpStatus: isGeminiRequestError(error) ? error.options.httpStatus : undefined, retryAfterSeconds: isGeminiRequestError(error) ? error.options.retryAfterSeconds : undefined })
     await ctx.runMutation(internal.credits.release, { reservationId: reservation.reservationId })
-    return args.templateSlots ? templateFallback() : fallback()
+    return args.templateSlots ? protectedTemplate('provider_unavailable', failureCode) : fallback()
   }
 } })
 
@@ -337,5 +391,15 @@ export const complete = mutation({
     }
     await ctx.db.patch(reservation._id, { status: 'completed' })
     return true
+  },
+})
+
+export const cancel = mutation({
+  args: { reservationId: v.id('creditLedger') },
+  handler: async (ctx, args): Promise<boolean> => {
+    const ownerId = await requireOwner(ctx, 'Please sign in before discarding a tailoring preview.')
+    const reservation = await ctx.db.get(args.reservationId)
+    if (!reservation || reservation.ownerId !== ownerId || reservation.kind !== 'tailored_resume') return false
+    return await ctx.runMutation(internal.credits.release, { reservationId: reservation._id })
   },
 })
