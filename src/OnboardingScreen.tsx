@@ -31,7 +31,7 @@ function unique(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))]
 }
 
-export function OnboardingScreen({ onExit, onComplete }: { onExit: () => void; onComplete: () => void }) {
+export function OnboardingScreen({ onExit, onComplete, onSignOut }: { onExit: () => void; onComplete: () => void; onSignOut: () => void }) {
   const savedResume = useQuery(api.resumes.mine)
   const savedMaster = useQuery(api.resumes.activeMaster)
   const savedPreferences = useQuery(api.preferences.mine)
@@ -247,7 +247,10 @@ export function OnboardingScreen({ onExit, onComplete }: { onExit: () => void; o
   return <main className="onboarding-shell">
     <header className="onboarding-header">
       <button className="onboarding-brand" onClick={onExit} type="button" aria-label="CareerPilot home">Career<span>Pil<i>o</i>t</span></button>
-      <button className="onboarding-save" onClick={onExit} type="button">Save and exit</button>
+      <div className="onboarding-header-actions">
+        <button className="onboarding-sign-out" onClick={onSignOut} type="button">Sign out</button>
+        <button className="onboarding-save" onClick={onExit} type="button">Save and exit</button>
+      </div>
     </header>
     <div className="onboarding-page">
       <div className="onboarding-layout">

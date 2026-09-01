@@ -481,6 +481,12 @@ function App() {
         window.history.pushState(null, '', '/')
         setScreen('landing')
       }}
+      onSignOut={() => {
+        void signOutAndClear().then(() => {
+          window.history.replaceState(null, '', '/')
+          setScreen('landing')
+        })
+      }}
       onComplete={() => {
         window.history.replaceState(null, '', '/dashboard')
         setScreen('apply')
